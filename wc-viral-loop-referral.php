@@ -400,70 +400,75 @@ class WC_Viral_Loop_Referral {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title><?php echo esc_html($this->settings['email_subject']); ?></title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #E8EFF4; }
-                .email-container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                .header { background: #5096ce; color: white; padding: 30px 20px; text-align: center; }
-                .header h1 { margin: 0; font-size: 24px; }
-                .content { padding: 30px; background-color: #E8EFF4;}
-                .coupon-box { background: #f8f9fa; border: 2px dashed #5096ce; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px; }
-                .coupon-code { font-size: 24px; font-weight: bold; color: #5096ce; margin: 10px 0; letter-spacing: 2px; }
-                .btn { border-radius: 5px; background: #ECF5FC; border: 1px solid #C0DFF4; border-bottom: 3px solid #C0DFF4; font-weight: 800; font-size: 14px; letter-spacing: 1.4px; color: #17284D; text-transform: uppercase; padding: 15px 30px; line-height: 16px; margin: 0px; margin-bottom: 15px; text-decoration: none;}
-                .footer { background: #5096ce; padding: 20px; text-align: center; font-size: 12px; color: #fff; }
-                .tiered-message { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
-                .tiered-message h4 { margin-top: 0; color: #856404; }
-            </style>
         </head>
-        <body>
-            <div class="email-container">
-                <div class="header">
-                    <h1><?php echo sprintf(__('Welcome to %s!', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></h1>
-                </div>
-                <div class="content">
-                    <p><?php _e('Hi there!', 'wc-viral-loop-referral'); ?></p>
-                    <p><?php echo sprintf(__('Thanks for joining us through a friend\'s referral%s! We\'re excited to have you as part of our community.', 'wc-viral-loop-referral'), !empty($referrer_email) ? ' (' . $referrer_email . ')' : ''); ?></p>
-                    
-                    <?php if ($is_tiered) : ?>
-                    <div class="tiered-message">
-                        <h4><?php _e('🎉 Special Bonus Discount!', 'wc-viral-loop-referral'); ?></h4>
-                        <p><?php _e('Your referrer is one of our top ambassadors! As a result, you\'re getting our exclusive enhanced discount of 10% off your first order.', 'wc-viral-loop-referral'); ?></p>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="coupon-box">
-                        <div><?php _e('Your Exclusive Discount Code:', 'wc-viral-loop-referral'); ?></div>
-                        <div class="coupon-code"><?php echo esc_html($coupon_code); ?></div>
-                        <div><?php echo sprintf(__('Save %s on your first order!', 'wc-viral-loop-referral'), $discount_text); ?></div>
-                        <?php if ($is_tiered) : ?>
-                        <div style="color: #856404; font-weight: bold; margin-top: 10px;">
-                            <?php _e('✨ Enhanced Ambassador Referral Discount ✨', 'wc-viral-loop-referral'); ?>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <p style="text-align: center; margin-bottom: 40px;">
-                        <a href="<?php echo esc_url($coupon_url); ?>" class="btn"><?php _e('Shop Now & Apply Coupon', 'wc-viral-loop-referral'); ?></a>
-                    </p>
-                    
-                    <p><strong><?php _e('Important Details:', 'wc-viral-loop-referral'); ?></strong></p>
-                    <ul>
-                        <li><?php _e('This coupon is exclusively for you and cannot be shared', 'wc-viral-loop-referral'); ?></li>
-                        <?php if (!empty($expiry_date)) : ?>
-                        <li><?php echo sprintf(__('Valid until: %s', 'wc-viral-loop-referral'), $expiry_date); ?></li>
-                        <?php endif; ?>
-                        <li><?php _e('Can only be used once', 'wc-viral-loop-referral'); ?></li>
-                        <li><?php _e('Cannot be combined with other offers', 'wc-viral-loop-referral'); ?></li>
-                    </ul>
-                    
-                    <p><?php _e('Ready to start shopping? Click the button above or copy the coupon code and paste it at checkout.', 'wc-viral-loop-referral'); ?></p>
-                    
-                    <p><?php echo sprintf(__('Happy shopping!<br>The %s Team', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
-                </div>
-                <div class="footer">
-                    <p><?php _e('This email was sent because you accepted a referral invitation.', 'wc-viral-loop-referral'); ?></p>
-                    <p><?php echo get_bloginfo('name') . ' | ' . home_url(); ?></p>
-                </div>
-            </div>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+            <table role="presentation" style="width: 100%; padding: 20px 0;">
+                <tr>
+                    <td align="center">
+                        <table role="presentation" style="max-width: 600px; margin: 0 auto; background: #EEF5FB; border-radius: 8px; overflow: hidden;">
+                            <!-- Header -->
+                            <tr>
+                                <td style="background-color: #EEF5FB; padding: 30px 20px 0px 20px; text-align: center;">
+                                    <img src="https://traningsmat.se/wp-content/uploads/2025/06/t-logo.png" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" style="max-width: 150px; height: auto; margin-bottom: 20px;">
+                                    <h1 style="margin: 0; font-size: 24px; color: #17284D;"><?php echo sprintf(__('Welcome to %s!', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 30px; background-color: #EEF5FB;">
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Hi there!', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #17284D; margin: 0 0 20px 0;"><?php echo sprintf(__('Thanks for joining us through a friend\'s referral%s! We\'re excited to have you as part of our community.', 'wc-viral-loop-referral'), !empty($referrer_email) ? ' (' . $referrer_email . ')' : ''); ?></p>
+                                    
+                                    <?php if ($is_tiered) : ?>
+                                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                        <h4 style="margin-top: 0; margin-bottom: 10px; color: #856404;"><?php _e('🎉 Special Bonus Discount!', 'wc-viral-loop-referral'); ?></h4>
+                                        <p style="margin: 0; color: #856404;"><?php _e('Your referrer is one of our top ambassadors! As a result, you\'re getting our exclusive enhanced discount of 10% off your first order.', 'wc-viral-loop-referral'); ?></p>
+                                    </div>
+                                    <?php endif; ?>
+                                    
+                                    <div style="background: #f8f9fa; border: 2px dashed #5096ce; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                                        <div style="color: #17284D; margin-bottom: 10px;"><?php _e('Your Exclusive Discount Code:', 'wc-viral-loop-referral'); ?></div>
+                                        <div style="font-size: 24px; font-weight: bold; color: #17284D; margin: 10px 0; letter-spacing: 2px;"><?php echo esc_html($coupon_code); ?></div>
+                                        <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Save %s on your first order!', 'wc-viral-loop-referral'), $discount_text); ?></div>
+                                        <?php if ($is_tiered) : ?>
+                                        <div style="color: #856404; font-weight: bold; margin: 10px 0;">
+                                            <?php _e('✨ Enhanced Ambassador Referral Discount ✨', 'wc-viral-loop-referral'); ?>
+                                        </div>
+                                        <?php endif; ?>
+                                        <div style="text-align: center; margin-top: 20px;">
+                                            <a href="<?php echo esc_url($coupon_url); ?>" style="display: inline-block; border-radius: 5px; background: #5096ce; border: 1px solid #5096ce; border-bottom: 3px solid #327bb5; font-weight: 800; font-size: 14px; letter-spacing: 1.4px; color: #fff; text-transform: uppercase; padding: 15px 30px; line-height: 16px; margin: 0; margin-bottom: 15px; text-decoration: none;"><?php _e('Shop Now & Apply Coupon', 'wc-viral-loop-referral'); ?></a>
+                                        </div>
+                                    </div>
+                                    
+                                    <p style="color: #17284D; margin: 20px 0 10px 0;"><strong><?php _e('Important Details:', 'wc-viral-loop-referral'); ?></strong></p>
+                                    <ul style="margin: 0 0 20px 0; padding-left: 20px;">
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('This coupon is exclusively for you and cannot be shared', 'wc-viral-loop-referral'); ?></li>
+                                        <?php if (!empty($expiry_date)) : ?>
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php echo sprintf(__('Valid until: %s', 'wc-viral-loop-referral'), $expiry_date); ?></li>
+                                        <?php endif; ?>
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Can only be used once', 'wc-viral-loop-referral'); ?></li>
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Cannot be combined with other offers', 'wc-viral-loop-referral'); ?></li>
+                                    </ul>
+                                    
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Ready to start shopping? Click the button above or copy the coupon code and paste it at checkout.', 'wc-viral-loop-referral'); ?></p>
+                                    
+                                    <p style="color: #17284D; margin: 0;"><?php echo sprintf(__('Happy shopping!<br>The %s Team', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background: #000; padding: 20px; text-align: center;">
+                                    <img src="https://traningsmat.se/wp-content/uploads/2025/06/Traningsmat-email.png" style="width: 100px; height: auto; margin-bottom: 15px;" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
+                                    <p style="color: #fff; margin: 0 0 5px 0; font-size: 12px;"><?php _e('This email was sent because you accepted a referral invitation.', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #fff; margin: 0; font-size: 12px;"><?php echo get_bloginfo('name') . ' | ' . home_url(); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
         </body>
         </html>
         <?php
@@ -792,6 +797,7 @@ class WC_Viral_Loop_Referral {
             const successHtml = `
                 <div id="coupon-success" style="background: #d4edda; border: 1px solid #c3e6cb; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
                     <h3 style="color: #155724; margin-top: 0;"><?php _e('Welcome! Your exclusive coupon is ready!', 'wc-viral-loop-referral'); ?></h3>
+                    <img src="https://traningsmat.se/wp-content/themes/traningsmat/img/traningsmat.svg" alt="Viral Loop Logo" style="width: 100px; height: 100px; margin-bottom: 20px;">
                     <p><?php _e('Your coupon code:', 'wc-viral-loop-referral'); ?> <strong style="font-size: 18px; color: #5096ce;">${couponCode}</strong></p>
                     <p><?php _e("We've sent this code to your email address.", 'wc-viral-loop-referral'); ?></p>
                     <a href="${couponUrl}" style="background: #5096ce; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;"><?php _e('Start Shopping', 'wc-viral-loop-referral'); ?></a>
