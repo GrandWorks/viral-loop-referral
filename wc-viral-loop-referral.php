@@ -3,8 +3,8 @@
  * Plugin Name: WooCommerce Viral Loop Referral
  * Plugin URI: https://yoursite.com
  * Description: Integrates Viral Loop referral system with WooCommerce to automatically generate and distribute unique coupon codes when referrals are accepted.
- * Version: 1.0.0
- * Author: Your Name
+ * Version: 1.0.5
+ * Author: Wazid Shah
  * Author URI: https://yoursite.com
  * Requires at least: 5.0
  * Tested up to: 6.6
@@ -23,13 +23,171 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.0');
+define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.5');
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_FILE', __FILE__);
 
 /**
+ * Plugin Update Checker
+ */
+class WC_Viral_Loop_Referral_Updater {
+    
+    private $plugin_file;
+    private $plugin_slug;
+    private $version;
+    private $github_username;
+    private $github_repo;
+    private $update_path;
+    
+    public function __construct($plugin_file, $github_username, $github_repo) {
+        $this->plugin_file = $plugin_file;
+        $this->plugin_slug = plugin_basename($plugin_file);
+        $this->version = WC_VIRAL_LOOP_REFERRAL_VERSION;
+        $this->github_username = $github_username;
+        $this->github_repo = $github_repo;
+        $this->update_path = 'https://api.github.com/repos/' . $github_username . '/' . $github_repo . '/releases/latest';
+        
+        add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_update'));
+        add_filter('plugins_api', array($this, 'plugin_api_call'), 10, 3);
+        add_filter('upgrader_source_selection', array($this, 'upgrader_source_selection'), 10, 3);
+        add_action('upgrader_process_complete', array($this, 'upgrader_process_complete'), 10, 2);
+    }
+    
+    /**
+     * Check for plugin updates
+     */
+    public function check_for_update($transient) {
+        if (empty($transient->checked)) {
+            return $transient;
+        }
+        
+        // Get remote version
+        $remote_version = $this->get_remote_version();
+        
+        if ($remote_version && version_compare($this->version, $remote_version, '<')) {
+            $transient->response[$this->plugin_slug] = (object) array(
+                'slug' => $this->plugin_slug,
+                'new_version' => $remote_version,
+                'url' => $this->get_github_repo_url(),
+                'package' => $this->get_download_url($remote_version)
+            );
+        }
+        
+        return $transient;
+    }
+    
+    /**
+     * Get remote version from GitHub
+     */
+    private function get_remote_version() {
+        $request = wp_remote_get($this->update_path);
+        
+        if (!is_wp_error($request) && wp_remote_retrieve_response_code($request) === 200) {
+            $body = wp_remote_retrieve_body($request);
+            $data = json_decode($body, true);
+            
+            if (isset($data['tag_name'])) {
+                return ltrim($data['tag_name'], 'v');
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get GitHub repository URL
+     */
+    private function get_github_repo_url() {
+        return 'https://github.com/' . $this->github_username . '/' . $this->github_repo;
+    }
+    
+    /**
+     * Get download URL for specific version
+     */
+    private function get_download_url($version) {
+        return 'https://github.com/' . $this->github_username . '/' . $this->github_repo . '/archive/v' . $version . '.zip';
+    }
+    
+    /**
+     * Handle plugin API calls
+     */
+    public function plugin_api_call($result, $action, $args) {
+        if ($action !== 'plugin_information' || $args->slug !== $this->plugin_slug) {
+            return $result;
+        }
+        
+        $remote_version = $this->get_remote_version();
+        
+        if ($remote_version) {
+            $result = (object) array(
+                'name' => 'WooCommerce Viral Loop Referral',
+                'slug' => $this->plugin_slug,
+                'version' => $remote_version,
+                'author' => 'Wazid Shah',
+                'homepage' => $this->get_github_repo_url(),
+                'short_description' => 'Integrates Viral Loop referral system with WooCommerce',
+                'sections' => array(
+                    'description' => 'Integrates Viral Loop referral system with WooCommerce to automatically generate and distribute unique coupon codes when referrals are accepted.',
+                    'changelog' => 'For changelog, please visit: ' . $this->get_github_repo_url() . '/releases'
+                ),
+                'download_link' => $this->get_download_url($remote_version),
+                'last_updated' => date('Y-m-d'),
+                'requires' => '5.0',
+                'tested' => '6.6',
+                'requires_php' => '7.4'
+            );
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Handle upgrader source selection
+     */
+    public function upgrader_source_selection($source, $remote_source, $upgrader) {
+        if (isset($upgrader->skin->plugin_info) && $upgrader->skin->plugin_info['Name'] === 'WooCommerce Viral Loop Referral') {
+            $corrected_source = $remote_source . '/' . $this->github_repo . '-' . ltrim($this->get_remote_version(), 'v') . '/';
+            
+            if (is_dir($corrected_source)) {
+                return $corrected_source;
+            }
+        }
+        
+        return $source;
+    }
+    
+    /**
+     * Handle upgrade process completion
+     */
+    public function upgrader_process_complete($upgrader_object, $options) {
+        if ($options['action'] === 'update' && $options['type'] === 'plugin') {
+            delete_transient('wc_viral_loop_referral_update_check');
+        }
+    }
+}
+
+/**
  * Main Plugin Class
+ * 
+ * REFERRAL FLOW EXPLANATION:
+ * 1. REFERRER creates a referral link/code in Viral Loop
+ * 2. REFEREE clicks the link and joins/signs up
+ * 3. Viral Loop sends webhook to this plugin (participation event)
+ * 4. Plugin creates a coupon ONLY for the REFEREE
+ * 5. Plugin sends welcome email with coupon ONLY to the REFEREE
+ * 6. REFERRER's successful referral count is incremented for tiered rewards
+ * 
+ * IMPORTANT: 
+ * - Only REFEREES get coupons and emails
+ * - REFERRERS never get coupons for their own referrals
+ * - Only successful referrals (where referee gets coupon) count toward thresholds
+ * - Users who join directly (no referrer) get NO coupons or emails
+ * 
+ * SCENARIOS:
+ * 1. User joins directly → NO email, NO coupon ✅
+ * 2. User joins via referrer → Email to REFEREE only, coupon for REFEREE only ✅  
+ * 3. User tries to refer themselves → Blocked, NO email, NO coupon ✅
  */
 class WC_Viral_Loop_Referral {
     
@@ -132,6 +290,7 @@ class WC_Viral_Loop_Referral {
         add_action('wp_ajax_nopriv_accept_referral', array($this, 'ajax_accept_referral'));
         add_action('wp_ajax_get_products_for_selector', array($this, 'ajax_get_products_for_selector'));
         add_action('wp_ajax_preview_referral_email', array($this, 'ajax_preview_referral_email'));
+        add_action('wp_ajax_check_plugin_updates', array($this, 'ajax_check_plugin_updates'));
         
         // Webhook handlers (no login required)
         add_action('wp_ajax_viral_loop_webhook', array($this, 'handle_viral_loop_webhook'));
@@ -198,7 +357,7 @@ class WC_Viral_Loop_Referral {
     }
     
     /**
-     * Handle referral acceptance
+     * Handle referral acceptance (manual/direct method)
      */
     public function handle_referral_acceptance() {
         // Check if this is a referral acceptance request
@@ -206,22 +365,60 @@ class WC_Viral_Loop_Referral {
             
             // Get referral data
             $referral_token = sanitize_text_field($_GET['referral_token'] ?? $_POST['referral_token'] ?? '');
-            $referrer_email = sanitize_email($_GET['referrer_email'] ?? $_POST['referrer_email'] ?? '');
-            $new_user_email = sanitize_email($_GET['new_user_email'] ?? $_POST['new_user_email'] ?? '');
+            $referrer_email = sanitize_email($_GET['referrer_email'] ?? $_POST['referrer_email'] ?? '');  // REFERRER (person who invited)
+            $new_user_email = sanitize_email($_GET['new_user_email'] ?? $_POST['new_user_email'] ?? '');  // REFEREE (person accepting referral)
             
             if (!empty($referral_token) && !empty($new_user_email)) {
+                
+                // CRITICAL: Only process if there's an actual referrer (not direct signups)
+                if (empty($referrer_email)) {
+                    if (WP_DEBUG) {
+                        error_log("Manual Referral: No referrer found - cannot process referral for: {$new_user_email}");
+                    }
+                    if (wp_doing_ajax()) {
+                        wp_send_json_error(array('message' => __('No referrer found - this is not a valid referral.', 'wc-viral-loop-referral')));
+                    }
+                    return;
+                }
+                
+                // IMPORTANT: Prevent referrers from referring themselves
+                if ($referrer_email === $new_user_email) {
+                    if (WP_DEBUG) {
+                        error_log("Manual Referral: Self-referral attempt blocked: {$new_user_email}");
+                    }
+                    if (wp_doing_ajax()) {
+                        wp_send_json_error(array('message' => __('You cannot refer yourself.', 'wc-viral-loop-referral')));
+                    }
+                    return;
+                }
+                
+                // Check if coupon already exists for this referee
+                if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
+                    if (wp_doing_ajax()) {
+                        wp_send_json_error(array('message' => __('You already have a coupon for this referral.', 'wc-viral-loop-referral')));
+                    }
+                    return;
+                }
+                
+                // Create referral coupon FOR THE REFEREE ONLY
                 $coupon_code = $this->create_referral_coupon($referral_token, $referrer_email, $new_user_email);
                 
                 if ($coupon_code) {
-                    // Send email with coupon
+                    // Send email with coupon TO THE REFEREE ONLY (not to referrer)
                     $this->send_referral_coupon_email($new_user_email, $coupon_code, $referrer_email);
+                    
+                    // Log for debugging
+                    if (WP_DEBUG) {
+                        error_log("Manual Referral: Created coupon {$coupon_code} for REFEREE {$new_user_email} (referred by {$referrer_email})");
+                    }
                     
                     // Return JSON response for AJAX requests
                     if (wp_doing_ajax() || (isset($_POST['action']) && $_POST['action'] === 'accept_referral')) {
                         wp_send_json_success(array(
                             'coupon_code' => $coupon_code,
                             'message' => __('Welcome! Your exclusive coupon code has been created.', 'wc-viral-loop-referral'),
-                            'coupon_url' => $this->get_coupon_apply_url($coupon_code)
+                            'coupon_url' => $this->get_coupon_apply_url($coupon_code),
+                            'referee_email' => $new_user_email
                         ));
                     }
                     
@@ -244,12 +441,12 @@ class WC_Viral_Loop_Referral {
      * Create referral coupon
      */
     private function create_referral_coupon($referral_token, $referrer_email = '', $new_user_email = '') {
-        // Generate unique coupon code
-        $coupon_code = 'REF-' . strtoupper(substr(md5($referral_token . $new_user_email . time()), 0, 8));
+        // Generate unique coupon code (lowercase)
+        $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time()), 0, 8));
         
         // Check if coupon already exists
         if (wc_get_coupon_id_by_code($coupon_code)) {
-            $coupon_code = 'REF-' . strtoupper(substr(md5($referral_token . $new_user_email . time() . rand()), 0, 8));
+            $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time() . rand()), 0, 8));
         }
         
         // Count previous successful referrals by this referrer
@@ -278,7 +475,7 @@ class WC_Viral_Loop_Referral {
         $coupon->set_usage_limit_per_user($this->settings['usage_limit_per_user']);
         $coupon->set_minimum_amount($this->settings['minimum_amount']);
         $coupon->set_free_shipping($this->settings['free_shipping']);
-        $coupon->set_email_restrictions(array($new_user_email));
+        // $coupon->set_email_restrictions(array($new_user_email));
         
         // Set product restrictions
         if (!empty($this->settings['product_ids'])) {
@@ -355,7 +552,11 @@ class WC_Viral_Loop_Referral {
     }
     
     /**
-     * Send referral coupon email
+     * Send referral coupon email TO THE REFEREE ONLY
+     * 
+     * @param string $recipient_email - REFEREE's email (person who joined via referral)
+     * @param string $coupon_code - Unique coupon code for the referee
+     * @param string $referrer_email - REFERRER's email (person who made the referral) - used for email content only
      */
     private function send_referral_coupon_email($recipient_email, $coupon_code, $referrer_email = '') {
         $coupon_url = $this->get_coupon_apply_url($coupon_code);
@@ -389,6 +590,38 @@ class WC_Viral_Loop_Referral {
     }
     
     /**
+     * Send notification email to referrer (NO COUPON - just thank you message)
+     * This function is for future use if you want to thank referrers
+     * 
+     * @param string $referrer_email - REFERRER's email (person who made the referral)
+     * @param string $referee_email - REFEREE's email (person who joined) 
+     * @param int $referral_count - How many successful referrals this referrer now has
+     */
+    private function send_referrer_thank_you_email($referrer_email, $referee_email, $referral_count) {
+        // This function is intentionally not called anywhere yet
+        // It's here for future use if you want to notify referrers (without giving them coupons)
+        
+        if (empty($referrer_email) || !is_email($referrer_email)) {
+            return false;
+        }
+        
+        $subject = sprintf(__('Thank you! Your referral was successful', 'wc-viral-loop-referral'));
+        $message = sprintf(
+            __('Hi there!<br><br>Great news! Someone joined through your referral link.<br><br>This is your %d successful referral. Keep sharing!<br><br>Thanks for being an awesome ambassador!<br><br>The %s Team', 'wc-viral-loop-referral'),
+            $referral_count,
+            get_bloginfo('name')
+        );
+        
+        $headers = array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . $this->settings['sender_name'] . ' <' . $this->settings['sender_email'] . '>'
+        );
+        
+        // NOTE: This email contains NO COUPON - it's just a thank you
+        return wp_mail($referrer_email, $subject, $message, $headers);
+    }
+    
+    /**
      * Get email template
      */
     private function get_email_template($coupon_code, $coupon_url, $discount_text, $expiry_date, $referrer_email, $is_tiered = false) {
@@ -410,50 +643,59 @@ class WC_Viral_Loop_Referral {
                             <tr>
                                 <td style="background-color: #EEF5FB; padding: 30px 20px 0px 20px; text-align: center;">
                                     <img src="https://traningsmat.se/wp-content/uploads/2025/06/t-logo.png" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" style="max-width: 150px; height: auto; margin-bottom: 20px;">
-                                    <h1 style="margin: 0; font-size: 24px; color: #17284D;"><?php echo sprintf(__('Welcome to %s!', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></h1>
+                                    <h1 style="margin: 0; font-size: 24px; color: #17284D;">Välkommen till Träningsmat!</h1>
                                 </td>
                             </tr>
                             
                             <!-- Content -->
                             <tr>
                                 <td style="padding: 30px; background-color: #EEF5FB;">
-                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Hi there!', 'wc-viral-loop-referral'); ?></p>
-                                    <p style="color: #17284D; margin: 0 0 20px 0;"><?php echo sprintf(__('Thanks for joining us through a friend\'s referral%s! We\'re excited to have you as part of our community.', 'wc-viral-loop-referral'), !empty($referrer_email) ? ' (' . $referrer_email . ')' : ''); ?></p>
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Hej!', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #17284D; margin: 0 0 20px 0;"><?php echo sprintf(__('Tack för att du gick med via din väns rekommendation %s! Vi är glada att ha dig som en del av Träningsmat-gänget!', 'wc-viral-loop-referral'), !empty($referrer_email) ? ' (' . $referrer_email . ')' : ''); ?></p>
                                     
-                                    <?php if ($is_tiered) : ?>
-                                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                        <h4 style="margin-top: 0; margin-bottom: 10px; color: #856404;"><?php _e('🎉 Special Bonus Discount!', 'wc-viral-loop-referral'); ?></h4>
-                                        <p style="margin: 0; color: #856404;"><?php _e('Your referrer is one of our top ambassadors! As a result, you\'re getting our exclusive enhanced discount of 10% off your first order.', 'wc-viral-loop-referral'); ?></p>
-                                    </div>
-                                    <?php endif; ?>
+                                    
                                     
                                     <div style="background: #f8f9fa; border: 2px dashed #5096ce; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-                                        <div style="color: #17284D; margin-bottom: 10px;"><?php _e('Your Exclusive Discount Code:', 'wc-viral-loop-referral'); ?></div>
+                                        <div style="color: #17284D; margin-bottom: 10px;"><?php _e('Din unika rabattkod:', 'wc-viral-loop-referral'); ?></div>
                                         <div style="font-size: 24px; font-weight: bold; color: #17284D; margin: 10px 0; letter-spacing: 2px;"><?php echo esc_html($coupon_code); ?></div>
-                                        <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Save %s on your first order!', 'wc-viral-loop-referral'), $discount_text); ?></div>
-                                        <?php if ($is_tiered) : ?>
-                                        <div style="color: #856404; font-weight: bold; margin: 10px 0;">
-                                            <?php _e('✨ Enhanced Ambassador Referral Discount ✨', 'wc-viral-loop-referral'); ?>
-                                        </div>
+                                        <?php if ($is_tiered==false) : ?>
+                                            <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Handla nu och använd rabattkoden för att få 5 gratis matlådor (värde %s)! Du betalar endast för leveransen.', 'wc-viral-loop-referral'), $discount_text); ?></div>
+                                        <?php else : ?>
+                                            <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Spara %s på din första beställning!', 'wc-viral-loop-referral'), $discount_text); ?></div>
                                         <?php endif; ?>
+                                        
                                         <div style="text-align: center; margin-top: 20px;">
-                                            <a href="<?php echo esc_url($coupon_url); ?>" style="display: inline-block; border-radius: 5px; background: #5096ce; border: 1px solid #5096ce; border-bottom: 3px solid #327bb5; font-weight: 800; font-size: 14px; letter-spacing: 1.4px; color: #fff; text-transform: uppercase; padding: 15px 30px; line-height: 16px; margin: 0; margin-bottom: 15px; text-decoration: none;"><?php _e('Shop Now & Apply Coupon', 'wc-viral-loop-referral'); ?></a>
+                                            <a href="<?php echo esc_url($coupon_url); ?>" style="display: inline-block; border-radius: 5px; background: #5096ce; border: 1px solid #5096ce; border-bottom: 3px solid #327bb5; font-weight: 800; font-size: 14px; letter-spacing: 1.4px; color: #fff; text-transform: uppercase; padding: 15px 30px; line-height: 16px; margin: 0; margin-bottom: 15px; text-decoration: none;"><?php _e('Handla nu och använd rabattkoden', 'wc-viral-loop-referral'); ?></a>
                                         </div>
                                     </div>
                                     
-                                    <p style="color: #17284D; margin: 20px 0 10px 0;"><strong><?php _e('Important Details:', 'wc-viral-loop-referral'); ?></strong></p>
-                                    <ul style="margin: 0 0 20px 0; padding-left: 20px;">
-                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('This coupon is exclusively for you and cannot be shared', 'wc-viral-loop-referral'); ?></li>
-                                        <?php if (!empty($expiry_date)) : ?>
-                                        <li style="color: #17284D; margin-bottom: 5px;"><?php echo sprintf(__('Valid until: %s', 'wc-viral-loop-referral'), $expiry_date); ?></li>
-                                        <?php endif; ?>
-                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Can only be used once', 'wc-viral-loop-referral'); ?></li>
-                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Cannot be combined with other offers', 'wc-viral-loop-referral'); ?></li>
-                                    </ul>
+                                    <p style="color: #17284D; margin: 20px 0 10px 0;"><strong><?php _e('Viktigt att veta:', 'wc-viral-loop-referral'); ?></strong></p>
+                                    <?php if($is_tiered==false) : ?>
+                                        <ul style="margin: 0 0 20px 0; padding-left: 20px;">
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Denna rabattkod är exklusiv för dig och får inte delas', 'wc-viral-loop-referral'); ?></li>
+                                            <?php if (!empty($expiry_date)) : ?>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php echo sprintf(__('Giltig till: %s', 'wc-viral-loop-referral'), $expiry_date); ?></li>
+                                            <?php endif; ?>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Kan endast användas en gång', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Kan inte kombineras med andra erbjudanden', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Du betalar endast för hemleverans med kylbil.', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Du kan när som helst avsluta din prenumeration för att inte få fler beställningar. Sista tillfälle att avsluta för att inte få en ytterligare beställning är söndag veckan innan leverans, kl. 23:59.', 'wc-viral-loop-referral'); ?></li>
+                                        </ul>
+                                    <?php else : ?>
+                                        <ul style="margin: 0 0 20px 0; padding-left: 20px;">
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Denna rabattkod är exklusiv för dig och får inte delas', 'wc-viral-loop-referral'); ?></li>
+                                            <?php if (!empty($expiry_date)) : ?>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php echo sprintf(__('Giltig till: %s', 'wc-viral-loop-referral'), $expiry_date); ?></li>
+                                            <?php endif; ?>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Kan endast användas en gång', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Kan inte kombineras med andra erbjudanden', 'wc-viral-loop-referral'); ?></li>
+                                            
+                                        </ul>
+                                    <?php endif; ?>       
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Redo att börja handla? Klicka på knappen ovan eller kopiera rabattkoden och klistra in den i kassan.', 'wc-viral-loop-referral'); ?></p>
                                     
-                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Ready to start shopping? Click the button above or copy the coupon code and paste it at checkout.', 'wc-viral-loop-referral'); ?></p>
-                                    
-                                    <p style="color: #17284D; margin: 0;"><?php echo sprintf(__('Happy shopping!<br>The %s Team', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
+                                    <p style="color: #17284D; margin: 0;"><?php echo sprintf(__('Vi ser fram emot att leverera till dig.', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
+                                    <p style="color: #17284D; margin: 0; font-weight: bold;"><?php echo sprintf(__('Träningsmat-gänget', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
                                 </td>
                             </tr>
                             
@@ -479,16 +721,16 @@ class WC_Viral_Loop_Referral {
      * Get coupon apply URL
      */
     private function get_coupon_apply_url($coupon_code) {
-        //return add_query_arg(array('apply_coupon' => $coupon_code), wc_get_cart_url());
-        return home_url('/').'?apply_coupon='.$coupon_code.'&sc-page=referred';
+        //return add_query_arg(array('coupon-code' => $coupon_code), wc_get_cart_url());
+        return home_url('/').'?coupon-code='.$coupon_code.'&sc-page=referred';
     }
     
     /**
      * Auto-apply coupon from URL
      */
     public function auto_apply_coupon_from_url() {
-        if (isset($_GET['apply_coupon']) && !is_admin()) {
-            $coupon_code = sanitize_text_field($_GET['apply_coupon']);
+        if (isset($_GET['coupon-code']) && !is_admin()) {
+            $coupon_code = sanitize_text_field($_GET['coupon-code']);
             
             if (!WC()->cart->is_empty() && !WC()->cart->has_discount($coupon_code)) {
                 WC()->cart->apply_coupon($coupon_code);
@@ -566,19 +808,19 @@ class WC_Viral_Loop_Referral {
         }
         
         // Sample data for test email
-        $sample_coupon_code = 'REF-TEST' . strtoupper(substr(md5(time()), 0, 6));
-        $sample_coupon_url = wc_get_cart_url() . '?apply_coupon=' . $sample_coupon_code;
+        $sample_coupon_code = 'ref-test' . strtolower(substr(md5(time()), 0, 6));
+        $sample_coupon_url = wc_get_cart_url() . '?coupon-code=' . $sample_coupon_code;
         $sample_referrer_email = 'john.doe@example.com';
         
         // Generate discount text based on current settings
         $discount_text = $this->settings['discount_type'] === 'percent' 
-            ? $this->settings['discount_amount'] . '% off' 
-            : wc_price($this->settings['discount_amount']) . ' off';
+            ? $this->settings['discount_amount'] . '%' 
+            : wc_price($this->settings['discount_amount']);
         
         // For tiered test, use tiered discount
         $is_tiered = ($email_type === 'tiered');
         if ($is_tiered) {
-            $discount_text = $this->settings['tiered_discount_amount'] . '% off';
+            $discount_text = $this->settings['tiered_discount_amount'] . '% ';
         }
         
         // Generate expiry date
@@ -621,6 +863,55 @@ class WC_Viral_Loop_Referral {
     }
     
     /**
+     * AJAX handler for checking plugin updates
+     */
+    public function ajax_check_plugin_updates() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_viral_loop_update_check')) {
+            wp_send_json_error('Invalid nonce');
+        }
+        
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Get remote version using our updater class
+        $github_username = 'your-github-username'; // Replace with actual GitHub username
+        $github_repo = 'your-repo-name'; // Replace with actual repository name
+        $update_path = 'https://api.github.com/repos/' . $github_username . '/' . $github_repo . '/releases/latest';
+        
+        $request = wp_remote_get($update_path);
+        
+        if (is_wp_error($request)) {
+            wp_send_json_error('Failed to connect to update server: ' . $request->get_error_message());
+        }
+        
+        if (wp_remote_retrieve_response_code($request) !== 200) {
+            wp_send_json_error('Update server returned error: ' . wp_remote_retrieve_response_code($request));
+        }
+        
+        $body = wp_remote_retrieve_body($request);
+        $data = json_decode($body, true);
+        
+        if (!isset($data['tag_name'])) {
+            wp_send_json_error('Invalid response from update server');
+        }
+        
+        $remote_version = ltrim($data['tag_name'], 'v');
+        $current_version = WC_VIRAL_LOOP_REFERRAL_VERSION;
+        
+        $update_available = version_compare($current_version, $remote_version, '<');
+        
+        wp_send_json_success(array(
+            'update_available' => $update_available,
+            'current_version' => $current_version,
+            'remote_version' => $remote_version,
+            'update_url' => admin_url('update-core.php')
+        ));
+    }
+    
+    /**
      * Handle Viral Loop webhook
      */
     public function handle_viral_loop_webhook() {
@@ -644,9 +935,15 @@ class WC_Viral_Loop_Referral {
             return;
         }
         
-        // Check if this is a participation event
-        if (!isset($webhook_data['type']) || $webhook_data['type'] !== 'participation') {
-            wp_send_json_error('Not a participation event');
+        // Check event type - we only process when someone JOINS via referral (not when they become a referrer)
+        $event_type = $webhook_data['type'] ?? '';
+        
+        if ($event_type !== 'participation') {
+            // Log other event types for debugging
+            if (WP_DEBUG) {
+                error_log("Viral Loop: Ignoring webhook event type: {$event_type}");
+            }
+            wp_send_json_error('Not a participation event - only processing when someone joins via referral');
             return;
         }
         
@@ -654,43 +951,64 @@ class WC_Viral_Loop_Referral {
         $user_data = $webhook_data['user'] ?? array();
         $referrer_data = $webhook_data['referrer'] ?? array();
         
-        $new_user_email = $user_data['email'] ?? '';
-        $referrer_email = $referrer_data['email'] ?? '';
+        $new_user_email = $user_data['email'] ?? '';  // REFEREE (person who joined)
+        $referrer_email = $referrer_data['email'] ?? '';  // REFERRER (person who invited)
         $referral_code = $user_data['referralCode'] ?? '';
         
         // Create unique referral token from available data
         $referral_token = $referral_code ?: md5($new_user_email . time());
         
         if (empty($new_user_email)) {
-            wp_send_json_error('Missing user email');
+            wp_send_json_error('Missing referee email');
             return;
         }
         
-        // Check if coupon already exists for this user/referral
+        // CRITICAL: Only process if there's an actual referrer (not direct signups)
+        if (empty($referrer_email)) {
+            if (WP_DEBUG) {
+                error_log("Viral Loop: No referrer found - this is a direct signup, not a referral. Skipping coupon creation for: {$new_user_email}");
+            }
+            wp_send_json_error('No referrer - this is a direct signup, not a referral. No coupon needed.');
+            return;
+        }
+        
+        // IMPORTANT: Prevent referrers from getting coupons for themselves
+        if ($referrer_email === $new_user_email) {
+            if (WP_DEBUG) {
+                error_log("Viral Loop: Self-referral attempt blocked: {$new_user_email}");
+            }
+            wp_send_json_error('Referrer cannot refer themselves');
+            return;
+        }
+        
+        // Check if coupon already exists for this referee/referral
         if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
-            wp_send_json_success('Coupon already exists for this user');
+            wp_send_json_success('Coupon already exists for this referee');
             return;
         }
         
-        // Create referral coupon
+        // Create referral coupon FOR THE REFEREE ONLY
         $coupon_code = $this->create_referral_coupon($referral_token, $referrer_email, $new_user_email);
         
         if ($coupon_code) {
-            // Send email with coupon
+            // Send email with coupon TO THE REFEREE ONLY (not to referrer)
             $email_sent = $this->send_referral_coupon_email($new_user_email, $coupon_code, $referrer_email);
             
-            // Log success
+            // Log success - clarify who gets what
             if (WP_DEBUG) {
-                error_log("Viral Loop: Created coupon {$coupon_code} for {$new_user_email}");
+                error_log("Viral Loop: Created coupon {$coupon_code} for REFEREE {$new_user_email} (referred by {$referrer_email})");
+                error_log("Viral Loop: Email sent to REFEREE ONLY: {$new_user_email}");
             }
             
             wp_send_json_success(array(
                 'coupon_code' => $coupon_code,
                 'email_sent' => $email_sent,
-                'message' => 'Coupon created successfully'
+                'message' => 'Coupon created successfully for referee',
+                'referee_email' => $new_user_email,
+                'referrer_email' => $referrer_email
             ));
         } else {
-            wp_send_json_error('Failed to create coupon');
+            wp_send_json_error('Failed to create coupon for referee');
         }
     }
     
@@ -700,6 +1018,9 @@ class WC_Viral_Loop_Referral {
     private function validate_viral_loop_webhook($data) {
         // Basic validation
         if (empty($data) || !is_array($data)) {
+            if (WP_DEBUG) {
+                error_log('Viral Loop Webhook: Invalid data structure');
+            }
             return false;
         }
         
@@ -707,6 +1028,9 @@ class WC_Viral_Loop_Referral {
         $required_fields = array('type', 'user');
         foreach ($required_fields as $field) {
             if (!isset($data[$field])) {
+                if (WP_DEBUG) {
+                    error_log("Viral Loop Webhook: Missing required field: {$field}");
+                }
                 return false;
             }
         }
@@ -714,7 +1038,23 @@ class WC_Viral_Loop_Referral {
         // Validate user data
         $user_data = $data['user'];
         if (!isset($user_data['email']) || !is_email($user_data['email'])) {
+            if (WP_DEBUG) {
+                error_log('Viral Loop Webhook: Invalid or missing user email');
+            }
             return false;
+        }
+        
+        // For participation events (referrals), require referrer data
+        if ($data['type'] === 'participation') {
+            $referrer_data = $data['referrer'] ?? array();
+            $referrer_email = $referrer_data['email'] ?? '';
+            
+            if (empty($referrer_email) || !is_email($referrer_email)) {
+                if (WP_DEBUG) {
+                    error_log('Viral Loop Webhook: Participation event missing valid referrer email - this appears to be a direct signup, not a referral');
+                }
+                return false;
+            }
         }
         
         return true;
@@ -986,4 +1326,9 @@ class WC_Viral_Loop_Referral {
 
 // Initialize the plugin
 WC_Viral_Loop_Referral::get_instance();
+
+// Initialize updater (you'll need to replace 'your-github-username' and 'your-repo-name' with actual values)
+if (is_admin()) {
+    new WC_Viral_Loop_Referral_Updater(__FILE__, 'your-github-username', 'your-repo-name');
+}
 ?>

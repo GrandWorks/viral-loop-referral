@@ -168,6 +168,42 @@ if (!defined('ABSPATH')) {
                         </form>
                     </div>
                 </div>
+                
+                <!-- Plugin Update Section -->
+                <div class="postbox" style="margin-top: 20px;">
+                    <h2 class="hndle"><?php _e('Plugin Updates', 'wc-viral-loop-referral'); ?></h2>
+                    <div class="inside">
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row"><?php _e('Current Version', 'wc-viral-loop-referral'); ?></th>
+                                <td>
+                                    <strong><?php echo WC_VIRAL_LOOP_REFERRAL_VERSION; ?></strong>
+                                    <p class="description"><?php _e('This is the currently installed version of the plugin.', 'wc-viral-loop-referral'); ?></p>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row"><?php _e('Check for Updates', 'wc-viral-loop-referral'); ?></th>
+                                <td>
+                                    <button type="button" class="button" onclick="checkForUpdates()"><?php _e('Check Now', 'wc-viral-loop-referral'); ?></button>
+                                    <p class="description"><?php _e('Manually check for plugin updates from the GitHub repository.', 'wc-viral-loop-referral'); ?></p>
+                                    <div id="updateCheckResult" style="margin-top: 10px;"></div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row"><?php _e('Update Information', 'wc-viral-loop-referral'); ?></th>
+                                <td>
+                                    <p class="description">
+                                        <?php _e('Updates are automatically checked when you visit the WordPress Updates page.', 'wc-viral-loop-referral'); ?><br>
+                                        <?php _e('You can also manually update from <strong>Dashboard → Updates</strong> when new versions are available.', 'wc-viral-loop-referral'); ?><br>
+                                        <strong><?php _e('Note:', 'wc-viral-loop-referral'); ?></strong> <?php _e('Make sure to configure your GitHub repository settings in the plugin code before using automatic updates.', 'wc-viral-loop-referral'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -216,6 +252,61 @@ function sendTestEmail(emailType) {
                 <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">
                     ❌ <strong><?php _e('Failed to send test email:', 'wc-viral-loop-referral'); ?></strong><br>
                     ${data.data || '<?php _e('Unknown error', 'wc-viral-loop-referral'); ?>'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">
+                ❌ <strong><?php _e('Network error:', 'wc-viral-loop-referral'); ?></strong><br>
+                ${error.message}
+            </div>
+        `;
+    });
+}
+
+// Check for plugin updates
+function checkForUpdates() {
+    const resultDiv = document.getElementById('updateCheckResult');
+    resultDiv.innerHTML = '<p style="color: #666;">⏳ <?php _e('Checking for updates...', 'wc-viral-loop-referral'); ?></p>';
+    
+    fetch(VAjaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'check_plugin_updates',
+            nonce: '<?php echo wp_create_nonce('wc_viral_loop_update_check'); ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.data.update_available) {
+                resultDiv.innerHTML = `
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; color: #856404;">
+                        🔄 <strong><?php _e('Update Available!', 'wc-viral-loop-referral'); ?></strong><br>
+                        <?php _e('Current version:', 'wc-viral-loop-referral'); ?> <code>${data.data.current_version}</code><br>
+                        <?php _e('Available version:', 'wc-viral-loop-referral'); ?> <code>${data.data.remote_version}</code><br>
+                        <br>
+                        <a href="${data.data.update_url}" class="button button-primary"><?php _e('Go to Updates Page', 'wc-viral-loop-referral'); ?></a>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; color: #155724;">
+                        ✅ <strong><?php _e('Plugin is up to date!', 'wc-viral-loop-referral'); ?></strong><br>
+                        <?php _e('Version:', 'wc-viral-loop-referral'); ?> <code>${data.data.current_version}</code>
+                    </div>
+                `;
+            }
+        } else {
+            resultDiv.innerHTML = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">
+                    ❌ <strong><?php _e('Failed to check for updates:', 'wc-viral-loop-referral'); ?></strong><br>
+                    ${data.data || '<?php _e('Unable to connect to update server', 'wc-viral-loop-referral'); ?>'}
                 </div>
             `;
         }

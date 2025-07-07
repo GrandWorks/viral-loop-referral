@@ -14,12 +14,14 @@ A WordPress plugin that integrates Viral Loop referral system with WooCommerce t
 - **WooCommerce Integration**: Seamless integration with WooCommerce cart system
 - **Webhook Support**: Handles Viral Loop webhook events
 - **Admin Dashboard**: Complete settings management interface
+- **Automatic Updates**: Built-in update system via GitHub releases
 
 ## Installation
 
 1. Upload the plugin files to the `/wp-content/plugins/viral-loops-woocommerce` directory
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Configure the plugin settings under WooCommerce > Viral Loop Referrals
+4. Set up your Viral Loop webhook to point to your WordPress site
 
 ## Requirements
 
@@ -51,6 +53,50 @@ A WordPress plugin that integrates Viral Loop referral system with WooCommerce t
 - Include/exclude product categories
 - Option to exclude sale items
 
+## Plugin Updates
+
+### GitHub Setup (Required for Updates)
+
+1. **Upload to GitHub**: 
+   - Create a GitHub repository for your plugin
+   - Upload all plugin files to the repository
+
+2. **Configure Update Settings**:
+   - Open `wc-viral-loop-referral.php`
+   - Find this line near the bottom:
+     ```php
+     new WC_Viral_Loop_Referral_Updater(__FILE__, 'your-github-username', 'your-repo-name');
+     ```
+   - Replace `'your-github-username'` with your actual GitHub username
+   - Replace `'your-repo-name'` with your actual repository name
+
+3. **Create Releases**:
+   - When you want to release an update, create a new release in GitHub
+   - Tag the release with version number (e.g., `v1.0.6`)
+   - The tag should match the version number in your plugin header
+
+### How Updates Work
+
+1. **Automatic Checking**: WordPress automatically checks for updates when you visit the Updates page
+2. **Manual Checking**: Use the "Check Now" button in the plugin settings
+3. **Installing Updates**: Updates appear in **Dashboard → Updates** like any other plugin
+4. **Version Management**: Update the version number in the plugin header before creating GitHub releases
+
+### Update Process
+
+1. Make changes to your plugin files
+2. Update the version number in `wc-viral-loop-referral.php`:
+   ```php
+   * Version: 1.0.6  // Update this line
+   ```
+3. Update the version constant:
+   ```php
+   define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.6');  // Update this line
+   ```
+4. Commit and push changes to GitHub
+5. Create a new release in GitHub with tag `v1.0.6`
+6. WordPress will automatically detect the update
+
 ## Usage
 
 ### Webhook Integration
@@ -71,7 +117,7 @@ Use `[referral_success]` shortcode on your referral success page.
 ### Auto-Apply Coupons
 Coupons are automatically applied when users visit:
 ```
-https://yoursite.com/?apply_coupon=COUPON_CODE&sc-page=referred
+https://yoursite.com/?coupon-code=COUPON_CODE&sc-page=referred
 ```
 
 ## Development
@@ -105,7 +151,47 @@ The email template uses table-based layout with inline CSS for maximum compatibi
 - Thunderbird
 - Mobile email clients
 
+## How It Works
+
+### The Referral Flow:
+1. **REFERRER** creates a referral link/code in Viral Loop
+2. **REFEREE** clicks the link and joins/signs up  
+3. Viral Loop sends webhook to this plugin (participation event)
+4. Plugin creates a coupon **ONLY for the REFEREE**
+5. Plugin sends welcome email with coupon **ONLY to the REFEREE**
+6. REFERRER's successful referral count is incremented for tiered rewards
+
+### Key Points:
+✅ **Only REFEREES get coupons and emails**
+✅ **REFERRERS never receive coupons for their own referrals**  
+✅ **Only successful referrals (where referee gets coupon) count toward thresholds**
+✅ **Self-referral protection prevents users from referring themselves**
+
 ## Changelog
+
+### 1.0.5
+- **CHANGED**: URL parameter changed from `apply_coupon` to `coupon-code` for better readability
+- **UPDATED**: All coupon URLs now use `?coupon-code=` instead of `?apply_coupon=`
+- **IMPROVED**: More semantic and user-friendly URL structure
+
+### 1.0.4
+- **CHANGED**: All coupon codes now generate in lowercase format (e.g., `ref-a1b2c3d4` instead of `REF-A1B2C3D4`)
+- **IMPROVED**: Consistent lowercase formatting for both live and test coupon codes
+
+### 1.0.3
+- **CRITICAL FIX**: Only send emails and create coupons when there's an actual referrer
+- **FIXED**: Prevent emails being sent to users who join directly (not via referral)
+- **IMPROVED**: Enhanced webhook validation to require referrer for participation events
+- **IMPROVED**: Better logging for direct signups vs referrals
+- **IMPROVED**: More robust validation in both webhook and manual referral handlers
+
+### 1.0.2
+- **IMPROVED**: Enhanced referral flow documentation and code comments
+- **ADDED**: Self-referral protection (users can't refer themselves)
+- **ADDED**: Duplicate coupon prevention for same referee/referral
+- **ADDED**: Clear logging to distinguish referrer vs referee actions  
+- **ADDED**: Better error messages and webhook event type validation
+- **ADDED**: Helper function for future referrer notifications (without coupons)
 
 ### 1.0.1
 - **FIXED**: Email HTML rendering in Gmail and other email clients
