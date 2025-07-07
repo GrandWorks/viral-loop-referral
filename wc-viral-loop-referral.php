@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: WooCommerce Viral Loop Referral
- * Plugin URI: https://yoursite.com
+ * Plugin URI: https://github.com/wazidshah/woocommerce-viral-loop-referral
  * Description: Integrates Viral Loop referral system with WooCommerce to automatically generate and distribute unique coupon codes when referrals are accepted.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: Wazid Shah
- * Author URI: https://yoursite.com
+ * Author URI: https://github.com/wazidshah
  * Requires at least: 5.0
  * Tested up to: 6.6
  * Requires PHP: 7.4
@@ -703,7 +703,7 @@ class WC_Viral_Loop_Referral {
                             <tr>
                                 <td style="background: #000; padding: 20px; text-align: center;">
                                     <img src="https://traningsmat.se/wp-content/uploads/2025/06/Traningsmat-email.png" style="width: 100px; height: auto; margin-bottom: 15px;" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
-                                    <p style="color: #fff; margin: 0 0 5px 0; font-size: 12px;"><?php _e('This email was sent because you accepted a referral invitation.', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #fff; margin: 0 0 5px 0; font-size: 12px;"><?php _e('Du har fått detta mejl eftersom du accepterat en inbjudan.', 'wc-viral-loop-referral'); ?></p>
                                     <p style="color: #fff; margin: 0; font-size: 12px;"><?php echo get_bloginfo('name') . ' | ' . home_url(); ?></p>
                                 </td>
                             </tr>
