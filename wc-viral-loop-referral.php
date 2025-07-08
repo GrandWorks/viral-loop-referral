@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.5');
+define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.6');
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_FILE', __FILE__);
@@ -877,8 +877,8 @@ class WC_Viral_Loop_Referral {
         }
         
         // Get remote version using our updater class
-        $github_username = 'your-github-username'; // Replace with actual GitHub username
-        $github_repo = 'your-repo-name'; // Replace with actual repository name
+        $github_username = 'GrandWorks';
+        $github_repo = 'viral-loop-referral';
         $update_path = 'https://api.github.com/repos/' . $github_username . '/' . $github_repo . '/releases/latest';
         
         $request = wp_remote_get($update_path);
@@ -1327,8 +1327,8 @@ class WC_Viral_Loop_Referral {
 // Initialize the plugin
 WC_Viral_Loop_Referral::get_instance();
 
-// Initialize updater (you'll need to replace 'your-github-username' and 'your-repo-name' with actual values)
+// Initialize updater
 if (is_admin()) {
-    new WC_Viral_Loop_Referral_Updater(__FILE__, 'your-github-username', 'your-repo-name');
+    new WC_Viral_Loop_Referral_Updater(__FILE__, 'GrandWorks', 'viral-loop-referral');
 }
 ?>

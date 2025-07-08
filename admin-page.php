@@ -123,6 +123,71 @@ if (!defined('ABSPATH')) {
                                 </tr>
                             </table>
                             
+                            <h3><?php _e('Product Restrictions', 'wc-viral-loop-referral'); ?></h3>
+                            <table class="form-table">
+                                <tr>
+                                    <th scope="row"><?php _e('Include Products', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <input type="text" name="product_ids" id="product_ids" value="<?php echo esc_attr(implode(',', $this->settings['product_ids'])); ?>" class="regular-text" />
+                                        <button type="button" class="button" onclick="openProductSelector('product_ids')"><?php _e('Select Products', 'wc-viral-loop-referral'); ?></button>
+                                        <p class="description"><?php _e('Comma-separated list of product IDs. Leave empty to allow all products. Click "Select Products" to choose from a list.', 'wc-viral-loop-referral'); ?></p>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <th scope="row"><?php _e('Exclude Products', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <input type="text" name="exclude_product_ids" id="exclude_product_ids" value="<?php echo esc_attr(implode(',', $this->settings['exclude_product_ids'])); ?>" class="regular-text" />
+                                        <button type="button" class="button" onclick="openProductSelector('exclude_product_ids')"><?php _e('Select Products', 'wc-viral-loop-referral'); ?></button>
+                                        <p class="description"><?php _e('Comma-separated list of product IDs to exclude from coupon usage.', 'wc-viral-loop-referral'); ?></p>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <th scope="row"><?php _e('Include Categories', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <select name="product_categories[]" multiple="multiple" style="width: 100%; height: 100px;">
+                                            <?php
+                                            $categories = get_terms(array(
+                                                'taxonomy' => 'product_cat',
+                                                'hide_empty' => false,
+                                            ));
+                                            foreach ($categories as $category) {
+                                                $selected = in_array($category->term_id, $this->settings['product_categories']) ? 'selected' : '';
+                                                echo '<option value="' . esc_attr($category->term_id) . '" ' . $selected . '>' . esc_html($category->name) . '</option>';
+                                            }
+                                            ?>
+                                        </select>
+                                        <p class="description"><?php _e('Hold Ctrl/Cmd to select multiple categories. Leave empty to allow all categories.', 'wc-viral-loop-referral'); ?></p>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <th scope="row"><?php _e('Exclude Categories', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <select name="exclude_product_categories[]" multiple="multiple" style="width: 100%; height: 100px;">
+                                            <?php
+                                            foreach ($categories as $category) {
+                                                $selected = in_array($category->term_id, $this->settings['exclude_product_categories']) ? 'selected' : '';
+                                                echo '<option value="' . esc_attr($category->term_id) . '" ' . $selected . '>' . esc_html($category->name) . '</option>';
+                                            }
+                                            ?>
+                                        </select>
+                                        <p class="description"><?php _e('Hold Ctrl/Cmd to select multiple categories to exclude from coupon usage.', 'wc-viral-loop-referral'); ?></p>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <th scope="row"><?php _e('Exclude Sale Items', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <label>
+                                            <input type="checkbox" name="exclude_sale_items" value="1" <?php checked($this->settings['exclude_sale_items']); ?> />
+                                            <?php _e('Exclude products that are already on sale from coupon usage.', 'wc-viral-loop-referral'); ?>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </table>
+                            
                             <h3><?php _e('Email Settings', 'wc-viral-loop-referral'); ?></h3>
                             <table class="form-table">
                                 <tr>
@@ -318,7 +383,123 @@ function checkForUpdates() {
                 ${error.message}
             </div>
         `;
+         });
+}
+
+// Product selector functionality
+function openProductSelector(fieldId) {
+    // Check if modal already exists
+    let modal = document.getElementById('product-selector-modal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Create modal
+    const modalHtml = `
+        <div id="product-selector-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 20px; border-radius: 8px; max-width: 80%; max-height: 80%; overflow: auto; min-width: 500px;">
+                <h3><?php _e('Select Products', 'wc-viral-loop-referral'); ?></h3>
+                <div id="product-search-container">
+                    <input type="text" id="product-search" placeholder="<?php _e('Search products...', 'wc-viral-loop-referral'); ?>" style="width: 100%; margin-bottom: 10px; padding: 8px;">
+                    <div id="product-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+                        <p><?php _e('Loading products...', 'wc-viral-loop-referral'); ?></p>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: right;">
+                    <button type="button" class="button" onclick="closeProductSelector()"><?php _e('Cancel', 'wc-viral-loop-referral'); ?></button>
+                    <button type="button" class="button button-primary" onclick="selectProducts('${fieldId}')"><?php _e('Select', 'wc-viral-loop-referral'); ?></button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Load products
+    loadProducts();
+}
+
+function loadProducts() {
+    const productList = document.getElementById('product-list');
+    
+    fetch(VAjaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'get_products_for_selector',
+            nonce: '<?php echo wp_create_nonce('wc_viral_loop_products'); ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let productHtml = '';
+            data.data.forEach(product => {
+                productHtml += `
+                    <div class="product-item" style="padding: 8px; border-bottom: 1px solid #eee; cursor: pointer;" data-product-id="${product.id}">
+                        <label style="cursor: pointer; display: flex; align-items: center;">
+                            <input type="checkbox" value="${product.id}" style="margin-right: 8px;">
+                            <span><strong>${product.name}</strong> - ${product.price} (ID: ${product.id})</span>
+                        </label>
+                    </div>
+                `;
+            });
+            productList.innerHTML = productHtml;
+            
+            // Add search functionality
+            const searchInput = document.getElementById('product-search');
+            searchInput.addEventListener('input', filterProducts);
+            
+            // Add click handlers for product items
+            const productItems = productList.querySelectorAll('.product-item');
+            productItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    if (e.target.type !== 'checkbox') {
+                        const checkbox = this.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                    }
+                });
+            });
+        } else {
+            productList.innerHTML = `<p style="color: red;"><?php _e('Failed to load products', 'wc-viral-loop-referral'); ?></p>`;
+        }
+    })
+    .catch(error => {
+        productList.innerHTML = `<p style="color: red;"><?php _e('Error loading products:', 'wc-viral-loop-referral'); ?> ${error.message}</p>`;
     });
+}
+
+function filterProducts() {
+    const searchTerm = document.getElementById('product-search').value.toLowerCase();
+    const productItems = document.querySelectorAll('.product-item');
+    
+    productItems.forEach(item => {
+        const productText = item.textContent.toLowerCase();
+        if (productText.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function selectProducts(fieldId) {
+    const checkedProducts = document.querySelectorAll('#product-list input[type="checkbox"]:checked');
+    const productIds = Array.from(checkedProducts).map(cb => cb.value);
+    
+    const field = document.getElementById(fieldId);
+    field.value = productIds.join(',');
+    
+    closeProductSelector();
+}
+
+function closeProductSelector() {
+    const modal = document.getElementById('product-selector-modal');
+    if (modal) {
+        modal.remove();
+    }
 }
 </script>
 
