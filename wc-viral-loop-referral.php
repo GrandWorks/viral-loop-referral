@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Viral Loop Referral
  * Plugin URI: https://github.com/wazidshah/woocommerce-viral-loop-referral
  * Description: Integrates Viral Loop referral system with WooCommerce to automatically generate and distribute unique coupon codes when referrals are accepted.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Wazid Shah
  * Author URI: https://github.com/wazidshah
  * Requires at least: 5.0
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.6');
+define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.7');
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_FILE', __FILE__);

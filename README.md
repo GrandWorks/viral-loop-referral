@@ -169,6 +169,13 @@ The email template uses table-based layout with inline CSS for maximum compatibi
 
 ## Changelog
 
+##1.0.7
+- **Removed**: Removed Debugging information from admin dashboard
+
+### 1.0.6
+- **ADDED**: Missing fields for product-based restriction for coupons
+- **IMPROVED**: Enhanced coupon restriction capabilities
+
 ### 1.0.5
 - **CHANGED**: URL parameter changed from `apply_coupon` to `coupon-code` for better readability
 - **UPDATED**: All coupon URLs now use `?coupon-code=` instead of `?apply_coupon=`

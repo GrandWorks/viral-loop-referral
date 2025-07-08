@@ -256,16 +256,6 @@ if (!defined('ABSPATH')) {
                                 </td>
                             </tr>
                             
-                            <tr>
-                                <th scope="row"><?php _e('Update Information', 'wc-viral-loop-referral'); ?></th>
-                                <td>
-                                    <p class="description">
-                                        <?php _e('Updates are automatically checked when you visit the WordPress Updates page.', 'wc-viral-loop-referral'); ?><br>
-                                        <?php _e('You can also manually update from <strong>Dashboard → Updates</strong> when new versions are available.', 'wc-viral-loop-referral'); ?><br>
-                                        <strong><?php _e('Note:', 'wc-viral-loop-referral'); ?></strong> <?php _e('Make sure to configure your GitHub repository settings in the plugin code before using automatic updates.', 'wc-viral-loop-referral'); ?>
-                                    </p>
-                                </td>
-                            </tr>
                         </table>
                     </div>
                 </div>
