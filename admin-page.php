@@ -93,8 +93,43 @@ if (!defined('ABSPATH')) {
                                 </tr>
                             </table>
                             
-                            <h3><?php _e('Tiered Referral System', 'wc-viral-loop-referral'); ?></h3>
+                            <h3><?php _e('Custom Coupon Mode', 'wc-viral-loop-referral'); ?></h3>
                             <table class="form-table">
+                                <tr>
+                                    <th scope="row"><?php _e('Enable Custom Coupon Mode', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <label>
+                                            <input type="checkbox" name="enable_custom_coupon_mode" value="1" <?php checked($this->settings['enable_custom_coupon_mode']); ?> onchange="toggleCustomCouponSettings()" />
+                                            <?php _e('Disable automatic coupon creation and use custom coupon code', 'wc-viral-loop-referral'); ?>
+                                        </label>
+                                        <p class="description"><?php _e('When enabled, the plugin will not create automatic coupons with discounts. Instead, it will send emails with your custom coupon code.', 'wc-viral-loop-referral'); ?></p>
+                                    </td>
+                                </tr>
+                                
+                                <tr class="custom-coupon-setting">
+                                    <th scope="row"><?php _e('Custom Coupon Code', 'wc-viral-loop-referral'); ?></th>
+                                    <td>
+                                        <input type="text" name="custom_coupon_code" value="<?php echo esc_attr($this->settings['custom_coupon_code']); ?>" class="regular-text" placeholder="<?php _e('Enter your custom coupon code', 'wc-viral-loop-referral'); ?>" />
+                                        <p class="description"><?php _e('Enter the custom coupon code that will be sent to all referees. Make sure this code exists in your WooCommerce coupons or create it manually.', 'wc-viral-loop-referral'); ?></p>
+                                        
+                                        <?php if ($this->settings['enable_custom_coupon_mode']) : ?>
+                                        <div class="custom-mode-warning">
+                                            <strong><?php _e('⚠️ Custom Coupon Mode Active', 'wc-viral-loop-referral'); ?></strong><br>
+                                            <?php _e('When this mode is enabled:', 'wc-viral-loop-referral'); ?>
+                                            <ul style="margin: 10px 0 0 20px;">
+                                                <li><?php _e('All automatic coupon creation and discount calculations are disabled', 'wc-viral-loop-referral'); ?></li>
+                                                <li><?php _e('Tiered referral system is bypassed', 'wc-viral-loop-referral'); ?></li>
+                                                <li><?php _e('Only emails with your custom coupon code will be sent', 'wc-viral-loop-referral'); ?></li>
+                                                <li><?php _e('You must create and manage the coupon code manually in WooCommerce', 'wc-viral-loop-referral'); ?></li>
+                                            </ul>
+                                        </div>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <h3 class="tiered-referral-section"><?php _e('Tiered Referral System', 'wc-viral-loop-referral'); ?></h3>
+                            <table class="form-table tiered-referral-section">
                                 <tr>
                                     <th scope="row"><?php _e('Enable Tiered Referrals', 'wc-viral-loop-referral'); ?></th>
                                     <td>
@@ -223,6 +258,9 @@ if (!defined('ABSPATH')) {
                                         <?php if ($this->settings['enable_tiered_referrals']) : ?>
                                         <button type="button" class="button" onclick="sendTestEmail('tiered')"><?php _e('Send Tiered Test Email', 'wc-viral-loop-referral'); ?></button>
                                         <?php endif; ?>
+                                        <?php if ($this->settings['enable_custom_coupon_mode']) : ?>
+                                        <button type="button" class="button" onclick="sendTestEmail('custom')"><?php _e('Send Custom Test Email', 'wc-viral-loop-referral'); ?></button>
+                                        <?php endif; ?>
                                         <p class="description"><?php _e('Send test emails to see how they will look in your email client. Test emails will have [TEST] prefix in subject line.', 'wc-viral-loop-referral'); ?></p>
                                         <div id="testEmailResult" style="margin-top: 10px;"></div>
                                     </td>
@@ -259,6 +297,38 @@ if (!defined('ABSPATH')) {
                         </table>
                     </div>
                 </div>
+                
+                <!-- Test Webhook Section -->
+                <div class="postbox" style="margin-top: 20px;">
+                    <h2 class="hndle"><?php _e('Test Webhook Simulation', 'wc-viral-loop-referral'); ?></h2>
+                    <div class="inside">
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row"><?php _e('Simulate Webhook Call', 'wc-viral-loop-referral'); ?></th>
+                                <td>
+                                    <div style="margin-bottom: 15px;">
+                                        <label><?php _e('Referrer Email:', 'wc-viral-loop-referral'); ?></label><br>
+                                        <input type="email" id="testReferrerEmail" value="referrer@example.com" class="regular-text" />
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label><?php _e('New User Email (Referee):', 'wc-viral-loop-referral'); ?></label><br>
+                                        <input type="email" id="testRefereeEmail" value="newuser@example.com" class="regular-text" />
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label><?php _e('Referral Code:', 'wc-viral-loop-referral'); ?></label><br>
+                                        <input type="text" id="testReferralCode" value="TEST123" class="regular-text" />
+                                    </div>
+                                    
+                                    <button type="button" class="button button-primary" onclick="simulateWebhook()"><?php _e('🚀 Simulate Referral Webhook', 'wc-viral-loop-referral'); ?></button>
+                                    <p class="description"><?php _e('This will simulate a Viral Loop webhook call to test the referral functionality. It will create a coupon and send an email to the referee.', 'wc-viral-loop-referral'); ?></p>
+                                    <div id="webhookTestResult" style="margin-top: 15px;"></div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -267,6 +337,31 @@ if (!defined('ABSPATH')) {
 <script>
 // Add AJAX URL for JavaScript
 const VAjaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+
+// Toggle custom coupon settings visibility
+function toggleCustomCouponSettings() {
+    const isCustomMode = document.querySelector('input[name="enable_custom_coupon_mode"]').checked;
+    const customCouponSettings = document.querySelectorAll('.custom-coupon-setting');
+    const tieredReferralSection = document.querySelectorAll('.tiered-referral-section');
+    
+    // Show/hide custom coupon field
+    customCouponSettings.forEach(function(element) {
+        element.style.display = isCustomMode ? 'table-row' : 'none';
+    });
+    
+    // Hide/show tiered referral settings
+    tieredReferralSection.forEach(function(element) {
+        element.style.display = isCustomMode ? 'none' : (element.tagName === 'H3' ? 'block' : 'table');
+    });
+    
+    // Show/hide test email buttons - we need to reload the page for proper PHP conditional rendering
+    // This is handled by PHP conditionals, but we could add some dynamic visibility here if needed
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCustomCouponSettings();
+});
 
 // Send test email functionality
 function sendTestEmail(emailType) {
@@ -491,6 +586,69 @@ function closeProductSelector() {
         modal.remove();
     }
 }
+
+// Simulate webhook functionality
+function simulateWebhook() {
+    const referrerEmail = document.getElementById('testReferrerEmail').value;
+    const refereeEmail = document.getElementById('testRefereeEmail').value;
+    const referralCode = document.getElementById('testReferralCode').value;
+    const resultDiv = document.getElementById('webhookTestResult');
+    
+    if (!referrerEmail || !refereeEmail || !referralCode) {
+        resultDiv.innerHTML = '<div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">❌ <?php _e('Please fill in all fields', 'wc-viral-loop-referral'); ?></div>';
+        return;
+    }
+    
+    if (referrerEmail === refereeEmail) {
+        resultDiv.innerHTML = '<div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">❌ <?php _e('Referrer and referee emails must be different (self-referral is blocked)', 'wc-viral-loop-referral'); ?></div>';
+        return;
+    }
+    
+    resultDiv.innerHTML = '<p style="color: #666;">⏳ <?php _e('Simulating webhook call...', 'wc-viral-loop-referral'); ?></p>';
+    
+    fetch(VAjaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'simulate_viral_loop_webhook',
+            referrer_email: referrerEmail,
+            referee_email: refereeEmail,
+            referral_code: referralCode,
+            nonce: '<?php echo wp_create_nonce('wc_viral_loop_webhook_test'); ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; color: #155724;">
+                    ✅ <strong><?php _e('Webhook simulation successful!', 'wc-viral-loop-referral'); ?></strong><br>
+                    <strong><?php _e('Coupon Created:', 'wc-viral-loop-referral'); ?></strong> <code>${data.data.coupon_code}</code><br>
+                    <strong><?php _e('Email Sent To:', 'wc-viral-loop-referral'); ?></strong> ${data.data.referee_email}<br>
+                    <strong><?php _e('Referred By:', 'wc-viral-loop-referral'); ?></strong> ${data.data.referrer_email}<br>
+                    ${data.data.email_sent ? '✅ <?php _e('Email sent successfully', 'wc-viral-loop-referral'); ?>' : '❌ <?php _e('Email failed to send', 'wc-viral-loop-referral'); ?>'}
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">
+                    ❌ <strong><?php _e('Webhook simulation failed:', 'wc-viral-loop-referral'); ?></strong><br>
+                    ${data.data || '<?php _e('Unknown error', 'wc-viral-loop-referral'); ?>'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; color: #721c24;">
+                ❌ <strong><?php _e('Network error:', 'wc-viral-loop-referral'); ?></strong><br>
+                ${error.message}
+            </div>
+        `;
+    });
+}
 </script>
 
 <style>
@@ -516,5 +674,23 @@ code {
     font-family: Consolas, Monaco, monospace;
     display: inline-block;
     margin: 5px 0;
+}
+
+/* Initially hide custom coupon settings */
+.custom-coupon-setting {
+    display: none;
+}
+
+/* Custom mode warning */
+.custom-mode-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 15px;
+    border-radius: 4px;
+    color: #856404;
+    margin: 15px 0;
+}
+.custom-mode-warning strong {
+    color: #856404;
 }
 </style> 

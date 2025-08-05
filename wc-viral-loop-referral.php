@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Viral Loop Referral
  * Plugin URI: https://github.com/wazidshah/woocommerce-viral-loop-referral
  * Description: Integrates Viral Loop referral system with WooCommerce to automatically generate and distribute unique coupon codes when referrals are accepted.
- * Version: 1.0.7
+ * Version: 1.0.8
  * Author: Wazid Shah
  * Author URI: https://github.com/wazidshah
  * Requires at least: 5.0
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.7');
+define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.8');
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WC_VIRAL_LOOP_REFERRAL_PLUGIN_FILE', __FILE__);
@@ -269,7 +269,9 @@ class WC_Viral_Loop_Referral {
             'exclude_sale_items' => false,
             'enable_tiered_referrals' => true,
             'tiered_threshold' => 3,
-            'tiered_discount_amount' => 10
+            'tiered_discount_amount' => 10,
+            'enable_custom_coupon_mode' => false,
+            'custom_coupon_code' => ''
         );
         
         $this->settings = wp_parse_args(get_option('wc_viral_loop_referral_settings', array()), $default_settings);
@@ -291,6 +293,7 @@ class WC_Viral_Loop_Referral {
         add_action('wp_ajax_get_products_for_selector', array($this, 'ajax_get_products_for_selector'));
         add_action('wp_ajax_preview_referral_email', array($this, 'ajax_preview_referral_email'));
         add_action('wp_ajax_check_plugin_updates', array($this, 'ajax_check_plugin_updates'));
+        add_action('wp_ajax_simulate_viral_loop_webhook', array($this, 'ajax_simulate_webhook'));
         
         // Webhook handlers (no login required)
         add_action('wp_ajax_viral_loop_webhook', array($this, 'handle_viral_loop_webhook'));
@@ -441,70 +444,112 @@ class WC_Viral_Loop_Referral {
      * Create referral coupon
      */
     private function create_referral_coupon($referral_token, $referrer_email = '', $new_user_email = '') {
-        // Generate unique coupon code (lowercase)
-        $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time()), 0, 8));
-        
-        // Check if coupon already exists
-        if (wc_get_coupon_id_by_code($coupon_code)) {
-            $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time() . rand()), 0, 8));
+        // Check if custom coupon mode is enabled
+        if ($this->settings['enable_custom_coupon_mode']) {
+            // Use custom coupon code if provided
+            if (!empty($this->settings['custom_coupon_code'])) {
+                $coupon_code = sanitize_text_field($this->settings['custom_coupon_code']);
+                
+                // Check if the custom coupon code already exists as a WooCommerce coupon
+                $existing_coupon_id = wc_get_coupon_id_by_code($coupon_code);
+                if ($existing_coupon_id) {
+                    // Use existing coupon instead of creating a new one
+                    return $coupon_code;
+                } else {
+                    // Custom coupon code doesn't exist as a WooCommerce coupon
+                    // We'll create it with the specified settings but skip most automated settings
+                    // since this is a manually managed coupon
+                }
+            } else {
+                // Custom mode enabled but no code provided
+                return false;
+            }
+        } else {
+            // Generate unique coupon code (lowercase) - original behavior
+            $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time()), 0, 8));
+            
+            // Check if coupon already exists
+            if (wc_get_coupon_id_by_code($coupon_code)) {
+                $coupon_code = 'ref-' . strtolower(substr(md5($referral_token . $new_user_email . time() . rand()), 0, 8));
+            }
         }
         
-        // Count previous successful referrals by this referrer
-        $previous_referrals = $this->count_referrer_successful_referrals($referrer_email);
-        
-        // Determine discount settings based on referral count
-        $discount_type = $this->settings['discount_type'];
-        $discount_amount = $this->settings['discount_amount'];
-        
-        // If tiered referrals are enabled and this referrer has reached the threshold
-        if ($this->settings['enable_tiered_referrals'] && $previous_referrals >= $this->settings['tiered_threshold']) {
-            $discount_type = 'percent';
-            $discount_amount = $this->settings['tiered_discount_amount'];
+        // Skip automated coupon creation in custom mode
+        if ($this->settings['enable_custom_coupon_mode']) {
+            // For custom coupon mode, we simply create a basic coupon with the custom code
+            // No tiered logic or complex settings - just create the coupon
+            $coupon = new WC_Coupon();
+            $coupon->set_code($coupon_code);
+            $coupon->set_description(__('Custom referral coupon', 'wc-viral-loop-referral'));
+            
+            // Apply basic settings but skip complex logic
+            $coupon->set_discount_type('percent');
+            $coupon->set_amount(0); // 0% discount since this is a custom code
+            $coupon->set_individual_use(true);
+            $coupon->set_usage_limit(0); // Unlimited usage for custom code
+            $coupon->set_usage_limit_per_user(0); // Unlimited per user for custom code
+            
+            // Save the coupon
+            $coupon_id = $coupon->save();
+        } else {
+            // Original automated coupon creation logic
+            // Count previous successful referrals by this referrer
+            $previous_referrals = $this->count_referrer_successful_referrals($referrer_email);
+            
+            // Determine discount settings based on referral count
+            $discount_type = $this->settings['discount_type'];
+            $discount_amount = $this->settings['discount_amount'];
+            
+            // If tiered referrals are enabled and this referrer has reached the threshold
+            if ($this->settings['enable_tiered_referrals'] && $previous_referrals >= $this->settings['tiered_threshold']) {
+                $discount_type = 'percent';
+                $discount_amount = $this->settings['tiered_discount_amount'];
+            }
+            
+            // Create the coupon
+            $coupon = new WC_Coupon();
+            
+            // Set coupon properties from settings (with potential override for 4th+ referrals)
+            $coupon->set_code($coupon_code);
+            $coupon->set_description(__('Referral welcome coupon', 'wc-viral-loop-referral'));
+            $coupon->set_discount_type($discount_type);
+            $coupon->set_amount($discount_amount);
+            $coupon->set_individual_use($this->settings['individual_use']);
+            $coupon->set_usage_limit($this->settings['usage_limit']);
+            $coupon->set_usage_limit_per_user($this->settings['usage_limit_per_user']);
+            $coupon->set_minimum_amount($this->settings['minimum_amount']);
+            $coupon->set_free_shipping($this->settings['free_shipping']);
+            // $coupon->set_email_restrictions(array($new_user_email));
+            
+            // Set product restrictions
+            if (!empty($this->settings['product_ids'])) {
+                $coupon->set_product_ids($this->settings['product_ids']);
+            }
+            
+            if (!empty($this->settings['exclude_product_ids'])) {
+                $coupon->set_excluded_product_ids($this->settings['exclude_product_ids']);
+            }
+            
+            if (!empty($this->settings['product_categories'])) {
+                $coupon->set_product_categories($this->settings['product_categories']);
+            }
+            
+            if (!empty($this->settings['exclude_product_categories'])) {
+                $coupon->set_excluded_product_categories($this->settings['exclude_product_categories']);
+            }
+            
+            if ($this->settings['exclude_sale_items']) {
+                $coupon->set_exclude_sale_items(true);
+            }
+            
+            // Set expiration date
+            if ($this->settings['expiry_days'] > 0) {
+                $coupon->set_date_expires(time() + ($this->settings['expiry_days'] * 24 * 60 * 60));
+            }
+            
+            // Save the coupon
+            $coupon_id = $coupon->save();
         }
-        
-        // Create the coupon
-        $coupon = new WC_Coupon();
-        
-        // Set coupon properties from settings (with potential override for 4th+ referrals)
-        $coupon->set_code($coupon_code);
-        $coupon->set_description(__('Referral welcome coupon', 'wc-viral-loop-referral'));
-        $coupon->set_discount_type($discount_type);
-        $coupon->set_amount($discount_amount);
-        $coupon->set_individual_use($this->settings['individual_use']);
-        $coupon->set_usage_limit($this->settings['usage_limit']);
-        $coupon->set_usage_limit_per_user($this->settings['usage_limit_per_user']);
-        $coupon->set_minimum_amount($this->settings['minimum_amount']);
-        $coupon->set_free_shipping($this->settings['free_shipping']);
-        // $coupon->set_email_restrictions(array($new_user_email));
-        
-        // Set product restrictions
-        if (!empty($this->settings['product_ids'])) {
-            $coupon->set_product_ids($this->settings['product_ids']);
-        }
-        
-        if (!empty($this->settings['exclude_product_ids'])) {
-            $coupon->set_excluded_product_ids($this->settings['exclude_product_ids']);
-        }
-        
-        if (!empty($this->settings['product_categories'])) {
-            $coupon->set_product_categories($this->settings['product_categories']);
-        }
-        
-        if (!empty($this->settings['exclude_product_categories'])) {
-            $coupon->set_excluded_product_categories($this->settings['exclude_product_categories']);
-        }
-        
-        if ($this->settings['exclude_sale_items']) {
-            $coupon->set_exclude_sale_items(true);
-        }
-        
-        // Set expiration date
-        if ($this->settings['expiry_days'] > 0) {
-            $coupon->set_date_expires(time() + ($this->settings['expiry_days'] * 24 * 60 * 60));
-        }
-        
-        // Save the coupon
-        $coupon_id = $coupon->save();
         
         if ($coupon_id) {
             // Store referral metadata
@@ -513,8 +558,14 @@ class WC_Viral_Loop_Referral {
             update_post_meta($coupon_id, '_referee_email', $new_user_email);
             update_post_meta($coupon_id, '_referral_created', current_time('mysql'));
             update_post_meta($coupon_id, '_is_referral_coupon', 'yes');
-            update_post_meta($coupon_id, '_referrer_referral_count', $previous_referrals + 1); // Track this referrer's total count
-            update_post_meta($coupon_id, '_is_tiered_referral', ($this->settings['enable_tiered_referrals'] && $previous_referrals >= $this->settings['tiered_threshold']) ? 'yes' : 'no'); // Mark if this used tiered discount
+            
+            // Only set these metadata for non-custom coupon mode
+            if (!$this->settings['enable_custom_coupon_mode']) {
+                update_post_meta($coupon_id, '_referrer_referral_count', $previous_referrals + 1); // Track this referrer's total count
+                update_post_meta($coupon_id, '_is_tiered_referral', ($this->settings['enable_tiered_referrals'] && $previous_referrals >= $this->settings['tiered_threshold']) ? 'yes' : 'no'); // Mark if this used tiered discount
+            } else {
+                update_post_meta($coupon_id, '_is_custom_coupon', 'yes'); // Mark as custom coupon
+            }
             
             return $coupon_code;
         }
@@ -562,19 +613,27 @@ class WC_Viral_Loop_Referral {
         $coupon_url = $this->get_coupon_apply_url($coupon_code);
         $expiry_date = '';
         
-        if ($this->settings['expiry_days'] > 0) {
-            $expiry_date = date('F j, Y', time() + ($this->settings['expiry_days'] * 24 * 60 * 60));
+        // Check if we're in custom coupon mode
+        if ($this->settings['enable_custom_coupon_mode']) {
+            // For custom coupons, we don't set expiry or complex logic
+            $discount_text = __('your special discount', 'wc-viral-loop-referral'); // Generic text since discount is managed manually
+            $is_tiered = false; // Custom coupons are not tiered
+        } else {
+            // Original logic for auto-created coupons
+            if ($this->settings['expiry_days'] > 0) {
+                $expiry_date = date('F j, Y', time() + ($this->settings['expiry_days'] * 24 * 60 * 60));
+            }
+            
+            // Get the actual coupon to determine its discount
+            $coupon_id = wc_get_coupon_id_by_code($coupon_code);
+            $coupon = new WC_Coupon($coupon_id);
+            $is_tiered = get_post_meta($coupon_id, '_is_tiered_referral', true) === 'yes';
+            
+            // Use actual coupon values for discount text
+            $discount_text = $coupon->get_discount_type() === 'percent' 
+                ? $coupon->get_amount() . '%' 
+                : wc_price($coupon->get_amount()). ' kr';
         }
-        
-        // Get the actual coupon to determine its discount
-        $coupon_id = wc_get_coupon_id_by_code($coupon_code);
-        $coupon = new WC_Coupon($coupon_id);
-        $is_tiered = get_post_meta($coupon_id, '_is_tiered_referral', true) === 'yes';
-        
-        // Use actual coupon values for discount text
-        $discount_text = $coupon->get_discount_type() === 'percent' 
-            ? $coupon->get_amount() . '% off' 
-            : wc_price($coupon->get_amount()) . ' off';
         
         // HTML email template
         $message = $this->get_email_template($coupon_code, $coupon_url, $discount_text, $expiry_date, $referrer_email, $is_tiered);
@@ -625,6 +684,7 @@ class WC_Viral_Loop_Referral {
      * Get email template
      */
     private function get_email_template($coupon_code, $coupon_url, $discount_text, $expiry_date, $referrer_email, $is_tiered = false) {
+        $is_custom_mode = $this->settings['enable_custom_coupon_mode'];
         ob_start();
         ?>
         <!DOCTYPE html>
@@ -658,7 +718,9 @@ class WC_Viral_Loop_Referral {
                                     <div style="background: #f8f9fa; border: 2px dashed #5096ce; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
                                         <div style="color: #17284D; margin-bottom: 10px;"><?php _e('Din unika rabattkod:', 'wc-viral-loop-referral'); ?></div>
                                         <div style="font-size: 24px; font-weight: bold; color: #17284D; margin: 10px 0; letter-spacing: 2px;"><?php echo esc_html($coupon_code); ?></div>
-                                        <?php if ($is_tiered==false) : ?>
+                                        <?php if ($is_custom_mode) : ?>
+                                            <div style="color: #17284D; margin-bottom: 15px;"><?php _e('Använd denna kod vid kassan för att få din speciella rabatt!', 'wc-viral-loop-referral'); ?></div>
+                                        <?php elseif ($is_tiered==false) : ?>
                                             <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Handla nu och använd rabattkoden för att få 5 gratis matlådor (värde %s)! Du betalar endast för leveransen.', 'wc-viral-loop-referral'), $discount_text); ?></div>
                                         <?php else : ?>
                                             <div style="color: #17284D; margin-bottom: 15px;"><?php echo sprintf(__('Spara %s på din första beställning!', 'wc-viral-loop-referral'), $discount_text); ?></div>
@@ -670,7 +732,13 @@ class WC_Viral_Loop_Referral {
                                     </div>
                                     
                                     <p style="color: #17284D; margin: 20px 0 10px 0;"><strong><?php _e('Viktigt att veta:', 'wc-viral-loop-referral'); ?></strong></p>
-                                    <?php if($is_tiered==false) : ?>
+                                    <?php if ($is_custom_mode) : ?>
+                                        <ul style="margin: 0 0 20px 0; padding-left: 20px;">
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Denna rabattkod är exklusiv för dig och får inte delas', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Använd koden vid kassan för att få din rabatt', 'wc-viral-loop-referral'); ?></li>
+                                            <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Se villkor och begränsningar på vår hemsida', 'wc-viral-loop-referral'); ?></li>
+                                        </ul>
+                                    <?php elseif($is_tiered==false) : ?>
                                         <ul style="margin: 0 0 20px 0; padding-left: 20px;">
                                             <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Denna rabattkod är exklusiv för dig och får inte delas', 'wc-viral-loop-referral'); ?></li>
                                             <?php if (!empty($expiry_date)) : ?>
@@ -812,21 +880,34 @@ class WC_Viral_Loop_Referral {
         $sample_coupon_url = wc_get_cart_url() . '?coupon-code=' . $sample_coupon_code;
         $sample_referrer_email = 'john.doe@example.com';
         
-        // Generate discount text based on current settings
-        $discount_text = $this->settings['discount_type'] === 'percent' 
-            ? $this->settings['discount_amount'] . '%' 
-            : wc_price($this->settings['discount_amount']);
-        
-        // For tiered test, use tiered discount
-        $is_tiered = ($email_type === 'tiered');
-        if ($is_tiered) {
-            $discount_text = $this->settings['tiered_discount_amount'] . '% ';
+        // Generate discount text based on current settings and email type
+        if ($email_type === 'custom') {
+            $discount_text = __('your special discount', 'wc-viral-loop-referral');
+            $is_tiered = false;
+        } else {
+            $discount_text = $this->settings['discount_type'] === 'percent' 
+                ? $this->settings['discount_amount'] . '%' 
+                : wc_price($this->settings['discount_amount']);
+            
+            // For tiered test, use tiered discount
+            $is_tiered = ($email_type === 'tiered');
+            if ($is_tiered) {
+                $discount_text = $this->settings['tiered_discount_amount'] . '% ';
+            }
         }
         
         // Generate expiry date
         $expiry_date = '';
         if ($this->settings['expiry_days'] > 0) {
             $expiry_date = date('F j, Y', time() + ($this->settings['expiry_days'] * 24 * 60 * 60));
+        }
+        
+        // Temporarily override custom mode setting for test emails
+        $original_custom_mode = $this->settings['enable_custom_coupon_mode'];
+        if ($email_type === 'custom') {
+            $this->settings['enable_custom_coupon_mode'] = true;
+        } else {
+            $this->settings['enable_custom_coupon_mode'] = false;
         }
         
         // Generate email HTML
@@ -838,6 +919,9 @@ class WC_Viral_Loop_Referral {
             $sample_referrer_email,
             $is_tiered
         );
+        
+        // Restore original setting
+        $this->settings['enable_custom_coupon_mode'] = $original_custom_mode;
         
         // Prepare email subject with [TEST] prefix
         $subject = '[TEST] ' . $this->settings['email_subject'];
@@ -859,6 +943,109 @@ class WC_Viral_Loop_Referral {
             ));
         } else {
             wp_send_json_error('Failed to send test email. Please check your email settings.');
+        }
+    }
+    
+    /**
+     * AJAX handler for simulating webhook calls (admin only)
+     */
+    public function ajax_simulate_webhook() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_viral_loop_webhook_test')) {
+            wp_send_json_error('Invalid nonce');
+        }
+        
+        // Check permissions
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Get test data from POST
+        $referrer_email = sanitize_email($_POST['referrer_email'] ?? '');
+        $referee_email = sanitize_email($_POST['referee_email'] ?? '');
+        $referral_code = sanitize_text_field($_POST['referral_code'] ?? '');
+        
+        // Validate input
+        if (empty($referrer_email) || empty($referee_email) || empty($referral_code)) {
+            wp_send_json_error('Missing required fields');
+        }
+        
+        if (!is_email($referrer_email) || !is_email($referee_email)) {
+            wp_send_json_error('Invalid email addresses');
+        }
+        
+        if ($referrer_email === $referee_email) {
+            wp_send_json_error('Referrer and referee cannot be the same (self-referral blocked)');
+        }
+        
+        // Create simulated webhook data that matches Viral Loop's format
+        $simulated_webhook_data = array(
+            'type' => 'participation',
+            'user' => array(
+                'email' => $referee_email,
+                'referralCode' => $referral_code,
+                'id' => 'sim_' . uniqid(),
+                'name' => 'Test User'
+            ),
+            'referrer' => array(
+                'email' => $referrer_email,
+                'id' => 'sim_ref_' . uniqid(),
+                'name' => 'Test Referrer'
+            ),
+            'campaign' => array(
+                'id' => 'test_campaign',
+                'name' => 'Test Campaign'
+            ),
+            'timestamp' => time(),
+            'source' => 'admin_simulation'
+        );
+        
+        // Use the existing webhook validation
+        if (!$this->validate_viral_loop_webhook($simulated_webhook_data)) {
+            wp_send_json_error('Simulated webhook data failed validation');
+        }
+        
+        // Process the simulated webhook using existing logic
+        $webhook_data = $simulated_webhook_data;
+        
+        // Extract user data (same as in handle_viral_loop_webhook)
+        $user_data = $webhook_data['user'] ?? array();
+        $referrer_data = $webhook_data['referrer'] ?? array();
+        
+        $new_user_email = $user_data['email'] ?? '';
+        $referrer_email_check = $referrer_data['email'] ?? '';
+        $referral_code_check = $user_data['referralCode'] ?? '';
+        
+        // Create unique referral token from available data
+        $referral_token = $referral_code_check ?: md5($new_user_email . time());
+        
+        // Check if coupon already exists for this referee/referral
+        if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
+            wp_send_json_error('Coupon already exists for this referee with this referral code');
+        }
+        
+        // Create referral coupon FOR THE REFEREE ONLY
+        $coupon_code = $this->create_referral_coupon($referral_token, $referrer_email_check, $new_user_email);
+        
+        if ($coupon_code) {
+            // Send email with coupon TO THE REFEREE ONLY
+            $email_sent = $this->send_referral_coupon_email($new_user_email, $coupon_code, $referrer_email_check);
+            
+            // Log success for debugging
+            if (WP_DEBUG) {
+                error_log("Simulated Webhook: Created coupon {$coupon_code} for REFEREE {$new_user_email} (referred by {$referrer_email_check})");
+            }
+            
+            wp_send_json_success(array(
+                'coupon_code' => $coupon_code,
+                'email_sent' => $email_sent,
+                'message' => 'Webhook simulation completed successfully',
+                'referee_email' => $new_user_email,
+                'referrer_email' => $referrer_email_check,
+                'referral_code' => $referral_code_check
+            ));
+        } else {
+            wp_send_json_error('Failed to create coupon for referee');
         }
     }
     
@@ -1231,10 +1418,13 @@ class WC_Viral_Loop_Referral {
                 $referee_email = get_post_meta($post_id, '_referee_email', true);
                 $created = get_post_meta($post_id, '_referral_created', true);
                 $is_tiered = get_post_meta($post_id, '_is_tiered_referral', true);
+                $is_custom = get_post_meta($post_id, '_is_custom_coupon', true);
                 $referral_count = get_post_meta($post_id, '_referrer_referral_count', true);
                 
                 echo '<strong>' . __('Referral Coupon', 'wc-viral-loop-referral') . '</strong><br>';
-                if ($is_tiered === 'yes') {
+                if ($is_custom === 'yes') {
+                    echo '<span style="color: #d63384; font-weight: bold;">🎯 ' . __('Custom Coupon Mode', 'wc-viral-loop-referral') . '</span><br>';
+                } else if ($is_tiered === 'yes') {
                     echo '<span style="color: #856404; font-weight: bold;">✨ ' . __('Tiered Referral (10%)', 'wc-viral-loop-referral') . '</span><br>';
                 }
                 if ($referrer_email) echo __('From:', 'wc-viral-loop-referral') . ' ' . esc_html($referrer_email) . '<br>';
@@ -1301,6 +1491,8 @@ class WC_Viral_Loop_Referral {
             $settings['enable_tiered_referrals'] = isset($_POST['enable_tiered_referrals']);
             $settings['tiered_threshold'] = intval($_POST['tiered_threshold']);
             $settings['tiered_discount_amount'] = floatval($_POST['tiered_discount_amount']);
+            $settings['enable_custom_coupon_mode'] = isset($_POST['enable_custom_coupon_mode']);
+            $settings['custom_coupon_code'] = sanitize_text_field($_POST['custom_coupon_code'] ?? '');
             
             update_option('wc_viral_loop_referral_settings', $settings);
             $this->settings = $settings;
