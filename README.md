@@ -116,8 +116,15 @@ Use `[referral_success]` shortcode on your referral success page.
 
 ### Auto-Apply Coupons
 Coupons are automatically applied when users visit:
+
+**Regular Coupons:**
 ```
 https://yoursite.com/?coupon-code=COUPON_CODE&sc-page=referred
+```
+
+**Custom Coupons:**
+```
+https://yoursite.com/?tm-coupon=COUPON_CODE&tm-page=referred
 ```
 
 ## Development

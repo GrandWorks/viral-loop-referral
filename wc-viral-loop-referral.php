@@ -395,12 +395,15 @@ class WC_Viral_Loop_Referral {
                     return;
                 }
                 
-                // Check if coupon already exists for this referee
-                if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
-                    if (wp_doing_ajax()) {
-                        wp_send_json_error(array('message' => __('You already have a coupon for this referral.', 'wc-viral-loop-referral')));
+                // Skip duplicate check for custom coupon mode (custom coupons can be reused)
+                if (!$this->settings['enable_custom_coupon_mode']) {
+                    // Check if coupon already exists for this referee
+                    if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
+                        if (wp_doing_ajax()) {
+                            wp_send_json_error(array('message' => __('You already have a coupon for this referral.', 'wc-viral-loop-referral')));
+                        }
+                        return;
                     }
-                    return;
                 }
                 
                 // Create referral coupon FOR THE REFEREE ONLY
@@ -635,8 +638,12 @@ class WC_Viral_Loop_Referral {
                 : wc_price($coupon->get_amount()). ' kr';
         }
         
-        // HTML email template
-        $message = $this->get_email_template($coupon_code, $coupon_url, $discount_text, $expiry_date, $referrer_email, $is_tiered);
+        // HTML email template - use custom template for custom coupon mode
+        if ($this->settings['enable_custom_coupon_mode']) {
+            $message = $this->get_custom_coupon_email_template($coupon_code, $coupon_url, $discount_text, $referrer_email);
+        } else {
+            $message = $this->get_email_template($coupon_code, $coupon_url, $discount_text, $expiry_date, $referrer_email, $is_tiered);
+        }
         
         // Set headers for HTML email
         $headers = array(
@@ -786,21 +793,112 @@ class WC_Viral_Loop_Referral {
     }
     
     /**
+     * Get custom coupon email template (separate from regular template)
+     */
+    private function get_custom_coupon_email_template($coupon_code, $coupon_url, $discount_text, $referrer_email = '') {
+        ob_start();
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title><?php echo esc_html($this->settings['email_subject']); ?></title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+            <table role="presentation" style="width: 100%; padding: 20px 0;">
+                <tr>
+                    <td align="center">
+                        <table role="presentation" style="max-width: 600px; margin: 0 auto; background: #EEF5FB; border-radius: 8px; overflow: hidden;">
+                            <!-- Header -->
+                            <tr>
+                                <td style="background-color: #EEF5FB; padding: 30px 20px 0px 20px; text-align: center;">
+                                    <img src="https://traningsmat.se/wp-content/uploads/2025/06/t-logo.png" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" style="max-width: 150px; height: auto; margin-bottom: 20px;">
+                                    <h1 style="margin: 0; font-size: 24px; color: #17284D;">Välkommen till Träningsmat!</h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 30px; background-color: #EEF5FB;">
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Hej!', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #17284D; margin: 0 0 20px 0;"><?php echo sprintf(__('Tack för att du gick med via din väns rekommendation %s! Vi är glada att ha dig som en del av Träningsmat-gänget!', 'wc-viral-loop-referral'), !empty($referrer_email) ? ' (' . $referrer_email . ')' : ''); ?></p>
+                                    
+                                    <!-- Custom Coupon Section -->
+                                    <div style="background: #f8f9fa; border: 2px dashed #5096ce; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                                        <div style="color: #17284D; margin-bottom: 10px;"><?php _e('Din unika rabattkod:', 'wc-viral-loop-referral'); ?></div>
+                                        <div style="font-size: 24px; font-weight: bold; color: #17284D; margin: 10px 0; letter-spacing: 2px;"><?php echo esc_html($coupon_code); ?></div>
+                                        <div style="color: #17284D; margin-bottom: 5px;"><?php _e('Med denna rabattkod får du som ny kund en gratis påse Träningsmat Proplus-proteinpulver 900g med din första leverans.', 'wc-viral-loop-referral'); ?></div>
+                                        <div style="color: #17284D; margin-bottom: 15px;"><?php _e('Därefter får du en ny påse med proteinpulver gratis var fjärde leverans och får totalt 12 leveranser med proteinpulver så länge du fortsätter prenumerera.', 'wc-viral-loop-referral'); ?></div>
+                                        
+                                        <div style="text-align: center; margin-top: 20px;">
+                                            <a href="<?php echo esc_url($coupon_url); ?>" style="display: inline-block; border-radius: 5px; background: #5096ce; border: 1px solid #5096ce; border-bottom: 3px solid #327bb5; font-weight: 800; font-size: 14px; letter-spacing: 1.4px; color: #fff; text-transform: uppercase; padding: 15px 30px; line-height: 16px; margin: 0; margin-bottom: 15px; text-decoration: none;"><?php _e('Handla nu med din rabattkod', 'wc-viral-loop-referral'); ?></a>
+                                        </div>
+                                    </div>
+                                    
+                                    <p style="color: #17284D; margin: 20px 0 10px 0;"><strong><?php _e('Om din rabattkod:', 'wc-viral-loop-referral'); ?></strong></p>
+                                    <ul style="margin: 0 0 20px 0; padding-left: 20px;">
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Denna rabattkod är exklusiv för dig och får inte delas', 'wc-viral-loop-referral'); ?></li>
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Använd koden vid kassan för att få din rabatt', 'wc-viral-loop-referral'); ?></li>
+                                        <li style="color: #17284D; margin-bottom: 5px;"><?php _e('Se villkor och begränsningar nedan eller på vår hemsida', 'wc-viral-loop-referral'); ?></li>
+                                    </ul>
+                                    
+                                    <p style="color: #17284D; margin: 0 0 15px 0;"><?php _e('Redo att börja handla? Klicka på knappen ovan eller kopiera rabattkoden och klistra in den i kassan.', 'wc-viral-loop-referral'); ?></p>
+                                    
+                                    <p style="color: #17284D; margin: 0;"><?php echo sprintf(__('Vi ser fram emot att leverera till dig.', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
+                                    <p style="color: #17284D; margin: 0; font-weight: bold;"><?php echo sprintf(__('Träningsmat-gänget', 'wc-viral-loop-referral'), get_bloginfo('name')); ?></p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background: #000; padding: 20px; text-align: center;">
+                                    <img src="https://traningsmat.se/wp-content/uploads/2025/06/Traningsmat-email.png" style="width: 100px; height: auto; margin-bottom: 15px;" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
+                                    <p style="color: #fff; margin: 0 0 5px 0; font-size: 12px;"><?php _e('Du har fått detta mejl eftersom du accepterat en inbjudan.', 'wc-viral-loop-referral'); ?></p>
+                                    <p style="color: #fff; margin: 0; font-size: 12px;"><?php echo get_bloginfo('name') . ' | ' . home_url(); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        <?php
+        return ob_get_clean();
+    }
+    
+    /**
      * Get coupon apply URL
      */
     private function get_coupon_apply_url($coupon_code) {
         //return add_query_arg(array('coupon-code' => $coupon_code), wc_get_cart_url());
-        return home_url('/').'?coupon-code='.$coupon_code.'&sc-page=referred';
+        
+        // Use different URL format for custom coupons vs regular coupons
+        if ($this->settings['enable_custom_coupon_mode']) {
+            return home_url('/').'?tm-coupon='.$coupon_code.'&tm-page=referred';
+        } else {
+            return home_url('/').'?coupon-code='.$coupon_code.'&sc-page=referred';
+        }
     }
     
     /**
      * Auto-apply coupon from URL
      */
     public function auto_apply_coupon_from_url() {
-        if (isset($_GET['coupon-code']) && !is_admin()) {
-            $coupon_code = sanitize_text_field($_GET['coupon-code']);
+        if (!is_admin()) {
+            $coupon_code = '';
             
-            if (!WC()->cart->is_empty() && !WC()->cart->has_discount($coupon_code)) {
+            // Check for custom coupon URL format
+            if (isset($_GET['tm-coupon'])) {
+                $coupon_code = sanitize_text_field($_GET['tm-coupon']);
+            }
+            // Check for regular coupon URL format (backward compatibility)
+            elseif (isset($_GET['coupon-code'])) {
+                $coupon_code = sanitize_text_field($_GET['coupon-code']);
+            }
+            
+            if (!empty($coupon_code) && !WC()->cart->is_empty() && !WC()->cart->has_discount($coupon_code)) {
                 WC()->cart->apply_coupon($coupon_code);
                 wc_add_notice(sprintf(__('Coupon "%s" has been applied to your cart!', 'wc-viral-loop-referral'), $coupon_code), 'success');
             }
@@ -877,7 +975,14 @@ class WC_Viral_Loop_Referral {
         
         // Sample data for test email
         $sample_coupon_code = 'ref-test' . strtolower(substr(md5(time()), 0, 6));
-        $sample_coupon_url = wc_get_cart_url() . '?coupon-code=' . $sample_coupon_code;
+        
+        // Generate URL based on email type
+        if ($email_type === 'custom') {
+            $sample_coupon_url = home_url('/') . '?tm-coupon=' . $sample_coupon_code . '&tm-page=referred';
+        } else {
+            $sample_coupon_url = home_url('/') . '?coupon-code=' . $sample_coupon_code . '&sc-page=referred';
+        }
+        
         $sample_referrer_email = 'john.doe@example.com';
         
         // Generate discount text based on current settings and email type
@@ -910,15 +1015,24 @@ class WC_Viral_Loop_Referral {
             $this->settings['enable_custom_coupon_mode'] = false;
         }
         
-        // Generate email HTML
-        $email_html = $this->get_email_template(
-            $sample_coupon_code,
-            $sample_coupon_url,
-            $discount_text,
-            $expiry_date,
-            $sample_referrer_email,
-            $is_tiered
-        );
+        // Generate email HTML using appropriate template
+        if ($email_type === 'custom') {
+            $email_html = $this->get_custom_coupon_email_template(
+                $sample_coupon_code,
+                $sample_coupon_url,
+                $discount_text,
+                $sample_referrer_email
+            );
+        } else {
+            $email_html = $this->get_email_template(
+                $sample_coupon_code,
+                $sample_coupon_url,
+                $discount_text,
+                $expiry_date,
+                $sample_referrer_email,
+                $is_tiered
+            );
+        }
         
         // Restore original setting
         $this->settings['enable_custom_coupon_mode'] = $original_custom_mode;
@@ -1019,9 +1133,12 @@ class WC_Viral_Loop_Referral {
         // Create unique referral token from available data
         $referral_token = $referral_code_check ?: md5($new_user_email . time());
         
-        // Check if coupon already exists for this referee/referral
-        if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
-            wp_send_json_error('Coupon already exists for this referee with this referral code');
+        // Skip duplicate check for custom coupon mode (custom coupons can be reused)
+        if (!$this->settings['enable_custom_coupon_mode']) {
+            // Check if coupon already exists for this referee/referral
+            if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
+                wp_send_json_error('Coupon already exists for this referee with this referral code');
+            }
         }
         
         // Create referral coupon FOR THE REFEREE ONLY
@@ -1168,10 +1285,13 @@ class WC_Viral_Loop_Referral {
             return;
         }
         
-        // Check if coupon already exists for this referee/referral
-        if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
-            wp_send_json_success('Coupon already exists for this referee');
-            return;
+        // Skip duplicate check for custom coupon mode (custom coupons can be reused)
+        if (!$this->settings['enable_custom_coupon_mode']) {
+            // Check if coupon already exists for this referee/referral
+            if ($this->coupon_exists_for_user($new_user_email, $referral_token)) {
+                wp_send_json_success('Coupon already exists for this referee');
+                return;
+            }
         }
         
         // Create referral coupon FOR THE REFEREE ONLY
