@@ -87,11 +87,11 @@ A WordPress plugin that integrates Viral Loop referral system with WooCommerce t
 1. Make changes to your plugin files
 2. Update the version number in `wc-viral-loop-referral.php`:
    ```php
-   * Version: 1.0.6  // Update this line
+   * Version: 1.1.0  // Update this line
    ```
 3. Update the version constant:
    ```php
-   define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.0.6');  // Update this line
+   define('WC_VIRAL_LOOP_REFERRAL_VERSION', '1.1.0');  // Update this line
    ```
 4. Commit and push changes to GitHub
 5. Create a new release in GitHub with tag `v1.0.6`
@@ -176,7 +176,16 @@ The email template uses table-based layout with inline CSS for maximum compatibi
 
 ## Changelog
 
-##1.0.7
+### 1.1.0
+- **ADDED**: Separate email template for custom coupon mode
+- **ADDED**: Custom URL format for custom coupons (`?tm-coupon=CODE&tm-page=referred`)
+- **FIXED**: Custom coupon mode now sends emails properly when users accept invitations
+- **FIXED**: Skip duplicate user checks for custom coupon mode to allow reusable custom coupons
+- **IMPROVED**: Enhanced email messaging specifically for custom coupons
+- **IMPROVED**: Backward compatibility maintained for regular coupon URLs
+- **IMPROVED**: Test email functionality supports both custom and regular templates
+
+### 1.0.7
 - **Removed**: Removed Debugging information from admin dashboard
 
 ### 1.0.6
